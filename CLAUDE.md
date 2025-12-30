@@ -92,6 +92,24 @@ This allows the ESP-IDF extension to recognize `firmware/` as a separate ESP-IDF
 - **Power**: 3.5-3.7V from E5 Ultra mainboard → HUZZAH32 BAT pin
 - **Flash**: 4MB
 
+## HID Input Test Tool
+
+A retro-futuristic test page for verifying HID input functionality:
+
+```
+test/hid-test.html
+```
+
+**Features:**
+- Three-circle layout matching physical mask (1280x720 screen)
+- Left dial: Frequency display (88.0-108.0 MHz), controlled by ↑↓ keys
+- Right dial: Mode selector (FM/AM/SW/LW/MW), controlled by ←→ keys
+- Center: Confirm button, controlled by Enter key
+- Smooth continuous scroll animation (retro radio dial style)
+- Amber/cyan glow effects with CRT aesthetic
+
+**Usage:** Transfer to device and open in browser for HID input testing.
+
 ## Documentation Language
 
 - Code comments: English

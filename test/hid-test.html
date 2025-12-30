@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280, height=720, initial-scale=1.0, user-scalable=no">
+    <title>HID Input Test - Cosmo Pager Radio</title>
+    <style>
+        :root {
+            /* Screen dimensions */
+            --screen-width: 1280px;
+            --screen-height: 720px;
+
+            /* Calculated sizes */
+            --main-circle-size: 720px;
+            --side-hole-size: 116px;
+
+            /* Positions */
+            --main-left: 280px;
+            --left-circle-left: 60px;
+            --right-circle-left: 1104px;
+            --side-circle-top: 302px;
+
+            /* Hardware offset */
+            --offset-x: 17px;
+
+            /* Retro Radio Color Palette */
+            --bg-black: #0a0a0a;
+            --panel-dark: #1a1a1a;
+            --panel-gradient-light: #2a2a2a;
+            --metal-border: #3a3a3a;
+            --metal-highlight: rgba(255, 255, 255, 0.08);
+
+            /* Glow colors */
+            --amber-glow: #f5a623;
+            --amber-dim: #8b5e14;
+            --cyan-glow: #00d4aa;
+            --cyan-dim: #007a63;
+            --red-indicator: #ff4444;
+
+            /* Text */
+            --text-bright: #ffffff;
+            --text-dim: #555555;
+            --text-label: #888888;
+        }
+
+        @keyframes pulse-amber {
+            0%, 100% {
+                text-shadow:
+                    0 0 10px rgba(245, 166, 35, 0.8),
+                    0 0 20px rgba(245, 166, 35, 0.4),
+                    0 0 30px rgba(245, 166, 35, 0.2);
+            }
+            50% {
+                text-shadow:
+                    0 0 15px rgba(245, 166, 35, 1),
+                    0 0 30px rgba(245, 166, 35, 0.6),
+                    0 0 45px rgba(245, 166, 35, 0.3);
+            }
+        }
+
+        @keyframes pulse-cyan {
+            0%, 100% {
+                text-shadow:
+                    0 0 10px rgba(0, 212, 170, 0.8),
+                    0 0 20px rgba(0, 212, 170, 0.4);
+            }
+            50% {
+                text-shadow:
+                    0 0 15px rgba(0, 212, 170, 1),
+                    0 0 30px rgba(0, 212, 170, 0.6);
+            }
+        }
+
+        @keyframes pulse-main {
+            0%, 100% {
+                box-shadow:
+                    inset 0 0 50px rgba(0, 212, 170, 0.1),
+                    0 0 30px rgba(0, 212, 170, 0.3);
+            }
+            50% {
+                box-shadow:
+                    inset 0 0 80px rgba(0, 212, 170, 0.15),
+                    0 0 50px rgba(0, 212, 170, 0.5);
+            }
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: var(--screen-width);
+            height: var(--screen-height);
+            background-color: var(--bg-black);
+            overflow: hidden;
+            font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+            position: relative;
+        }
+
+        /* Base circle styles */
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(
+                circle at 30% 30%,
+                var(--panel-gradient-light) 0%,
+                var(--panel-dark) 50%,
+                var(--bg-black) 100%
+            );
+            border: 2px solid var(--metal-border);
+            box-shadow:
+                inset 0 2px 15px rgba(0, 0, 0, 0.8),
+                inset 0 -1px 5px rgba(255, 255, 255, 0.05),
+                0 1px 0 var(--metal-highlight);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* ==================== MAIN CIRCLE ==================== */
+        .main-circle {
+            width: var(--main-circle-size);
+            height: var(--main-circle-size);
+            left: calc(var(--main-left) + var(--offset-x));
+            top: 0;
+        }
+
+        .main-circle .content {
+            text-align: center;
+            z-index: 2;
+        }
+
+        .main-circle .station-logo {
+            font-size: 14px;
+            color: var(--text-dim);
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .main-circle .main-display {
+            font-size: 120px;
+            font-weight: bold;
+            color: var(--cyan-glow);
+            letter-spacing: 4px;
+            text-shadow:
+                0 0 20px rgba(0, 212, 170, 0.8),
+                0 0 40px rgba(0, 212, 170, 0.4),
+                0 0 60px rgba(0, 212, 170, 0.2);
+            transition: all 0.15s ease-out;
+        }
+
+        .main-circle.active .main-display {
+            color: #ffffff;
+            text-shadow:
+                0 0 30px rgba(255, 255, 255, 0.9),
+                0 0 60px rgba(0, 212, 170, 0.8),
+                0 0 90px rgba(0, 212, 170, 0.5);
+        }
+
+        .main-circle.active {
+            animation: pulse-main 0.5s ease-out;
+        }
+
+        .main-circle .hint {
+            font-size: 12px;
+            color: var(--text-dim);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            margin-top: 30px;
+        }
+
+        .main-circle .counter {
+            font-size: 14px;
+            color: var(--text-label);
+            margin-top: 10px;
+        }
+
+        /* Scanline overlay for CRT effect */
+        .main-circle::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.1) 2px,
+                rgba(0, 0, 0, 0.1) 4px
+            );
+            pointer-events: none;
+            border-radius: 50%;
+        }
+
+        /* ==================== SIDE CIRCLES ==================== */
+        .side-circle {
+            width: var(--side-hole-size);
+            height: var(--side-hole-size);
+            top: var(--side-circle-top);
+        }
+
+        .left-circle {
+            left: calc(var(--left-circle-left) + var(--offset-x));
+        }
+
+        .right-circle {
+            left: calc(var(--right-circle-left) + var(--offset-x));
+        }
+
+        /* ==================== FREQUENCY DIAL (Left) ==================== */
+        .freq-dial {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .freq-dial .label {
+            position: absolute;
+            bottom: 8px;
+            font-size: 8px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .freq-dial .dial-window {
+            width: 90%;
+            height: 70px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .freq-dial .dial-track {
+            position: absolute;
+            width: 100%;
+            top: 50%;
+            margin-top: -11px;  /* Half of item height to center */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.35s ease-out;
+        }
+
+        .freq-dial .freq-item {
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--amber-dim);
+            transition: all 0.15s ease;
+        }
+
+        .freq-dial .freq-item.active {
+            font-size: 18px;
+            color: var(--amber-glow);
+            animation: pulse-amber 2s ease-in-out infinite;
+        }
+
+        .freq-dial .freq-item.near {
+            font-size: 12px;
+            color: var(--amber-dim);
+            opacity: 0.6;
+        }
+
+        .freq-dial .freq-item.far {
+            font-size: 10px;
+            opacity: 0.3;
+        }
+
+        /* Center indicator marks */
+        .freq-dial .indicator {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--red-indicator);
+            font-size: 8px;
+            z-index: 10;
+        }
+
+        .freq-dial .indicator.left {
+            left: 4px;
+        }
+
+        .freq-dial .indicator.right {
+            right: 4px;
+        }
+
+        .left-circle.active {
+            border-color: var(--amber-glow);
+            box-shadow:
+                inset 0 2px 15px rgba(0, 0, 0, 0.8),
+                0 0 20px rgba(245, 166, 35, 0.5),
+                0 0 40px rgba(245, 166, 35, 0.2);
+        }
+
+        /* ==================== MODE SELECTOR (Right) ==================== */
+        .mode-dial {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .mode-dial .label {
+            position: absolute;
+            bottom: 8px;
+            font-size: 8px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .mode-dial .dial-window {
+            width: 100%;
+            height: 50px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding-left: 50%;
+        }
+
+        .mode-dial .dial-track {
+            display: flex;
+            align-items: center;
+            transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .mode-dial .mode-item {
+            font-size: 9px;
+            font-weight: bold;
+            color: var(--cyan-dim);
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            opacity: 0.3;
+            width: 32px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .mode-dial .mode-item.active {
+            font-size: 14px;
+            color: var(--cyan-glow);
+            opacity: 1;
+            animation: pulse-cyan 2s ease-in-out infinite;
+        }
+
+        .mode-dial .mode-item.near {
+            font-size: 10px;
+            opacity: 0.5;
+        }
+
+        /* Center indicator */
+        .mode-dial .indicator {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--red-indicator);
+            font-size: 6px;
+            z-index: 10;
+        }
+
+        .right-circle.active {
+            border-color: var(--cyan-glow);
+            box-shadow:
+                inset 0 2px 15px rgba(0, 0, 0, 0.8),
+                0 0 20px rgba(0, 212, 170, 0.5),
+                0 0 40px rgba(0, 212, 170, 0.2);
+        }
+
+        /* ==================== STATUS BAR ==================== */
+        .status-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 10, 10, 0.9);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: var(--text-dim);
+            border: 1px solid var(--metal-border);
+            z-index: 100;
+            letter-spacing: 1px;
+        }
+
+        .status-bar .key {
+            color: var(--cyan-glow);
+            font-weight: bold;
+        }
+
+        /* ==================== DECORATIVE ELEMENTS ==================== */
+        .tick-marks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .side-circle .tick-marks::before,
+        .side-circle .tick-marks::after {
+            content: '';
+            position: absolute;
+            background: var(--metal-border);
+        }
+
+        .left-circle .tick-marks::before {
+            width: 1px;
+            height: 8px;
+            top: 6px;
+            left: 50%;
+        }
+
+        .left-circle .tick-marks::after {
+            width: 1px;
+            height: 8px;
+            bottom: 20px;
+            left: 50%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Left side circle (Frequency Dial - EC11 #1) -->
+    <div class="circle side-circle left-circle" id="leftCircle">
+        <div class="tick-marks"></div>
+        <div class="freq-dial">
+            <span class="indicator left">&#9654;</span>
+            <span class="indicator right">&#9664;</span>
+            <div class="dial-window">
+                <div class="dial-track" id="freqTrack">
+                    <!-- Frequency items will be generated by JS -->
+                </div>
+            </div>
+            <span class="label">FM MHz</span>
+        </div>
+    </div>
+
+    <!-- Main center circle (Enter button) -->
+    <div class="circle main-circle" id="mainCircle">
+        <div class="content">
+            <div class="station-logo">Parallel Universe</div>
+            <div class="main-display" id="mainDisplay">RADIO</div>
+            <div class="hint">Press Enter to Confirm</div>
+            <div class="counter" id="enterCount">Signal: 0</div>
+        </div>
+    </div>
+
+    <!-- Right side circle (Mode Selector - EC11 #2) -->
+    <div class="circle side-circle right-circle" id="rightCircle">
+        <div class="mode-dial">
+            <span class="indicator">&#9660;</span>
+            <div class="dial-window">
+                <div class="dial-track" id="modeTrack">
+                    <!-- Mode items will be generated by JS -->
+                </div>
+            </div>
+            <span class="label">Band</span>
+        </div>
+    </div>
+
+    <!-- Status bar for debugging -->
+    <div class="status-bar" id="statusBar">
+        Input: <span class="key" id="lastKey">-</span>
+    </div>
+
+    <script>
+        // ==================== CONFIGURATION ====================
+        const CONFIG = {
+            freq: {
+                min: 88.0,
+                max: 108.0,
+                step: 0.1,
+                initial: 98.0,
+                visibleItems: 5  // Number of items visible in dial
+            },
+            modes: ['FM', 'AM', 'SW', 'LW', 'MW'],
+            animation: {
+                duration: 350,  // Slower, smoother scroll
+                itemHeight: 22,  // px - must match CSS
+                modeItemWidth: 32  // px - width of mode items (must match CSS)
+            }
+        };
+
+        // ==================== STATE ====================
+        let state = {
+            frequency: CONFIG.freq.initial,
+            modeIndex: 0,
+            enterCount: 0
+        };
+
+        // ==================== DOM ELEMENTS ====================
+        const elements = {
+            mainCircle: document.getElementById('mainCircle'),
+            leftCircle: document.getElementById('leftCircle'),
+            rightCircle: document.getElementById('rightCircle'),
+            mainDisplay: document.getElementById('mainDisplay'),
+            enterCount: document.getElementById('enterCount'),
+            freqTrack: document.getElementById('freqTrack'),
+            modeTrack: document.getElementById('modeTrack'),
+            lastKey: document.getElementById('lastKey')
+        };
+
+        // ==================== FREQUENCY DIAL ====================
+        // Generate a large pool of frequency values for smooth scrolling
+        const FREQ_POOL_SIZE = 201; // 88.0 to 108.0 with 0.1 step = 201 values
+        let freqPoolOffset = 0; // Current scroll position in pixels
+
+        function initFreqDial() {
+            // Generate all frequency values
+            const items = [];
+            for (let f = CONFIG.freq.min; f <= CONFIG.freq.max + 0.05; f += CONFIG.freq.step) {
+                const freq = Math.round(f * 10) / 10;
+                items.push(`<div class="freq-item">${freq.toFixed(1)}</div>`);
+            }
+            elements.freqTrack.innerHTML = items.join('');
+
+            // Set initial position to show current frequency
+            const initialIndex = Math.round((state.frequency - CONFIG.freq.min) / CONFIG.freq.step);
+            freqPoolOffset = initialIndex * CONFIG.animation.itemHeight;
+            elements.freqTrack.style.transform = `translateY(${-freqPoolOffset}px)`;
+
+            updateFreqHighlight();
+        }
+
+        function updateFreqHighlight() {
+            // Update visual highlighting based on current frequency
+            const items = elements.freqTrack.querySelectorAll('.freq-item');
+            const currentIndex = Math.round((state.frequency - CONFIG.freq.min) / CONFIG.freq.step);
+
+            items.forEach((item, index) => {
+                item.classList.remove('active', 'near', 'far');
+                const distance = Math.abs(index - currentIndex);
+                if (distance === 0) item.classList.add('active');
+                else if (distance === 1) item.classList.add('near');
+                else if (distance <= 2) item.classList.add('far');
+            });
+        }
+
+        function scrollFreqDial(direction) {
+            // direction: 1 = up (frequency increases), -1 = down (frequency decreases)
+            const newFreq = state.frequency + (direction * CONFIG.freq.step);
+
+            // Check bounds
+            if (newFreq < CONFIG.freq.min || newFreq > CONFIG.freq.max) {
+                return;
+            }
+
+            state.frequency = Math.round(newFreq * 10) / 10;
+
+            // Calculate new offset - when frequency increases, we scroll up (negative direction)
+            const targetIndex = Math.round((state.frequency - CONFIG.freq.min) / CONFIG.freq.step);
+            const targetOffset = targetIndex * CONFIG.animation.itemHeight;
+
+            // Smooth scroll animation
+            elements.freqTrack.style.transition = `transform ${CONFIG.animation.duration}ms ease-out`;
+            elements.freqTrack.style.transform = `translateY(${-targetOffset}px)`;
+
+            freqPoolOffset = targetOffset;
+            updateFreqHighlight();
+        }
+
+        // ==================== MODE SELECTOR ====================
+        function initModeDial() {
+            // Generate all mode items
+            const items = CONFIG.modes.map(mode => `<div class="mode-item">${mode}</div>`);
+            elements.modeTrack.innerHTML = items.join('');
+
+            // Set initial position
+            const itemWidth = CONFIG.animation.modeItemWidth;
+            const centerOffset = -(state.modeIndex * itemWidth + itemWidth / 2);
+            elements.modeTrack.style.transform = `translateX(${centerOffset}px)`;
+
+            updateModeHighlight();
+        }
+
+        function updateModeHighlight() {
+            const items = elements.modeTrack.querySelectorAll('.mode-item');
+            items.forEach((item, index) => {
+                item.classList.remove('active', 'near');
+                const distance = Math.abs(index - state.modeIndex);
+                if (distance === 0) item.classList.add('active');
+                else if (distance === 1) item.classList.add('near');
+            });
+        }
+
+        function scrollModeDial(direction) {
+            // direction: 1 = right (next mode), -1 = left (previous mode)
+            state.modeIndex = (state.modeIndex + direction + CONFIG.modes.length) % CONFIG.modes.length;
+
+            const itemWidth = CONFIG.animation.modeItemWidth;
+            const centerOffset = -(state.modeIndex * itemWidth + itemWidth / 2);
+
+            // Smooth scroll animation
+            elements.modeTrack.style.transition = `transform ${CONFIG.animation.duration}ms ease-out`;
+            elements.modeTrack.style.transform = `translateX(${centerOffset}px)`;
+
+            updateModeHighlight();
+        }
+
+        // ==================== MAIN DISPLAY ====================
+        function updateMainDisplay() {
+            elements.enterCount.textContent = `Signal: ${state.enterCount}`;
+        }
+
+        // ==================== INPUT HANDLING ====================
+        function flashCircle(element) {
+            element.classList.add('active');
+        }
+
+        function unflashCircle(element) {
+            element.classList.remove('active');
+        }
+
+        function handleKeyDown(e) {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
+                e.preventDefault();
+            }
+
+            elements.lastKey.textContent = e.key;
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    flashCircle(elements.leftCircle);
+                    scrollFreqDial(1);  // Frequency up - dial scrolls up
+                    break;
+
+                case 'ArrowDown':
+                    flashCircle(elements.leftCircle);
+                    scrollFreqDial(-1);  // Frequency down - dial scrolls down
+                    break;
+
+                case 'ArrowRight':
+                    flashCircle(elements.rightCircle);
+                    scrollModeDial(1);  // Next mode - dial scrolls right
+                    break;
+
+                case 'ArrowLeft':
+                    flashCircle(elements.rightCircle);
+                    scrollModeDial(-1);  // Previous mode - dial scrolls left
+                    break;
+
+                case 'Enter':
+                    flashCircle(elements.mainCircle);
+                    state.enterCount++;
+                    updateMainDisplay();
+                    // Flash effect on main display
+                    elements.mainDisplay.textContent = 'TUNED';
+                    setTimeout(() => {
+                        elements.mainDisplay.textContent = 'RADIO';
+                    }, 300);
+                    break;
+            }
+        }
+
+        function handleKeyUp(e) {
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'ArrowDown':
+                    unflashCircle(elements.leftCircle);
+                    break;
+                case 'ArrowLeft':
+                case 'ArrowRight':
+                    unflashCircle(elements.rightCircle);
+                    break;
+                case 'Enter':
+                    unflashCircle(elements.mainCircle);
+                    break;
+            }
+        }
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
+
+        // Initial render
+        initFreqDial();
+        initModeDial();
+        updateMainDisplay();
+
+        // Ensure focus for keyboard events
+        document.body.focus();
+        document.body.addEventListener('click', () => document.body.focus());
+    </script>
+</body>
+</html>
