@@ -74,13 +74,91 @@ GPIO 14  ── 旋钮2 DT
 
 ## 开发环境
 
-本项目使用 **ESP-IDF** 进行固件开发（非 Arduino）。
+本项目使用 **ESP-IDF v5.5** 进行固件开发（非 Arduino）。
 
-ESP-IDF 安装：
+### 环境初始化
+
 ```bash
-# macOS
-get_idf  # 如已配置 ESP-IDF 环境别名
+# 激活 ESP-IDF 环境
+get_idf  # 别名定义在 ~/.zshrc
+
+# 进入固件目录
+cd firmware
+
+# 首次构建需设置目标芯片
+idf.py set-target esp32
 ```
+
+### 常用命令
+
+```bash
+# 构建
+idf.py build
+
+# 烧录（替换为实际串口）
+idf.py -p /dev/cu.usbserial-0001 flash
+
+# 监视串口输出
+idf.py -p /dev/cu.usbserial-0001 monitor
+
+# 构建+烧录+监视
+idf.py -p /dev/cu.usbserial-0001 flash monitor
+
+# 清理构建
+idf.py fullclean
+```
+
+### GPIO 驱动使用
+
+ESP-IDF v5.x 使用独立的 GPIO 驱动组件。在 CMakeLists.txt 中需添加依赖：
+
+```cmake
+idf_component_register(
+    SRCS "main.c"
+    PRIV_REQUIRES esp_driver_gpio
+)
+```
+
+GPIO 配置示例：
+
+```c
+#include "driver/gpio.h"
+
+gpio_config_t io_conf = {
+    .pin_bit_mask = (1ULL << GPIO_NUM),
+    .mode = GPIO_MODE_INPUT,
+    .pull_up_en = GPIO_PULLUP_ENABLE,
+    .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    .intr_type = GPIO_INTR_DISABLE,
+};
+gpio_config(&io_conf);
+
+// 读取电平
+int level = gpio_get_level(GPIO_NUM);
+```
+
+### 旋转编码器原理
+
+EC11 旋转编码器使用 Gray Code 编码，两相信号 (CLK/DT) 的状态变化序列：
+
+```
+顺时针 (CW):  00 → 01 → 11 → 10 → 00
+逆时针 (CCW): 00 → 10 → 11 → 01 → 00
+```
+
+通过检测状态转换方向判断旋转方向。10ms 轮询间隔足够检测人手旋转速度。
+
+### HID 键码参考
+
+| 按键 | USB HID 码 |
+|------|-----------|
+| Enter | 0x28 |
+| Up Arrow | 0x52 |
+| Down Arrow | 0x51 |
+| Left Arrow | 0x50 |
+| Right Arrow | 0x4F |
+
+完整键码表参考 [USB HID Usage Tables](https://usb.org/sites/default/files/hut1_4.pdf) 第 10 章。
 
 ## 官方资源
 

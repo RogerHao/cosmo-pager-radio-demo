@@ -43,6 +43,7 @@
 ```
 cosmo-pager-radio-demo/
 ├── README.md                           # 本文档
+├── CLAUDE.md                           # Claude Code 开发指南
 ├── docs/
 │   ├── design/
 │   │   └── hardware-architecture.md    # 硬件架构设计
@@ -50,9 +51,15 @@ cosmo-pager-radio-demo/
 │   │   ├── README.md
 │   │   └── *.png/jpg                   # 设备图片
 │   └── references/                     # 参考资料
-│       ├── adafruit-huzzah32.md
+│       ├── adafruit-huzzah32.md        # HUZZAH32 引脚与开发参考
 │       └── esp-idf-bluetooth-hid.md
-└── firmware/                           # ESP32 固件（待开发）
+└── firmware/                           # ESP32 BLE HID 固件
+    ├── main/
+    │   ├── esp_hid_device_main.c       # 主程序：GPIO 输入 + HID 发送
+    │   ├── esp_hid_gap.c               # BLE GAP/GATT 连接管理
+    │   └── CMakeLists.txt
+    ├── sdkconfig.defaults              # 构建配置（NimBLE + 键盘模式）
+    └── CMakeLists.txt
 ```
 
 ## 相关项目
@@ -64,9 +71,26 @@ cosmo-pager-radio-demo/
 - [x] 硬件方案设计
 - [x] 外壳 3D 建模（进行中）
 - [x] ESP32 供电方案验证
-- [ ] ESP32 固件开发
+- [x] ESP32 固件开发 - GPIO 输入 + BLE HID 键盘
+- [ ] 硬件接线与功能测试
 - [ ] 外壳 3D 打印与组装
 - [ ] 整机调试
+
+### 固件功能
+
+当前固件实现：
+- BLE HID 键盘设备（NimBLE 协议栈）
+- 两个 EC11 旋转编码器输入（Gray Code 解码）
+- 一个按钮输入
+- 10ms 轮询周期，内部上拉电阻
+
+构建与烧录：
+```bash
+cd firmware
+get_idf                                    # 激活 ESP-IDF 环境
+idf.py build                               # 构建
+idf.py -p /dev/cu.usbserial-0001 flash     # 烧录
+```
 
 ## 文档索引
 
