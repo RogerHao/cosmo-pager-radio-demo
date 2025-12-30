@@ -39,6 +39,21 @@
 
 #include "esp_hidd.h"
 #include "esp_hid_gap.h"
+#include "driver/gpio.h"
+
+// GPIO pin definitions for input devices
+#define GPIO_BUTTON     27
+#define GPIO_ENC1_CLK   33
+#define GPIO_ENC1_DT    15
+#define GPIO_ENC2_CLK   32
+#define GPIO_ENC2_DT    14
+
+// HID key codes for arrow keys and enter
+#define HID_KEY_ENTER       0x28
+#define HID_KEY_UP_ARROW    0x52
+#define HID_KEY_DOWN_ARROW  0x51
+#define HID_KEY_LEFT_ARROW  0x50
+#define HID_KEY_RIGHT_ARROW 0x4F
 
 static const char *TAG = "HID_DEV_DEMO";
 
@@ -344,21 +359,103 @@ void send_keyboard(char c)
     esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
 }
 
+// Initialize GPIO pins for button and rotary encoders
+static void gpio_input_init(void)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << GPIO_BUTTON) |
+                        (1ULL << GPIO_ENC1_CLK) | (1ULL << GPIO_ENC1_DT) |
+                        (1ULL << GPIO_ENC2_CLK) | (1ULL << GPIO_ENC2_DT),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    ESP_LOGI(TAG, "GPIO input initialized: BTN=%d, ENC1=%d/%d, ENC2=%d/%d",
+             GPIO_BUTTON, GPIO_ENC1_CLK, GPIO_ENC1_DT, GPIO_ENC2_CLK, GPIO_ENC2_DT);
+}
+
+// Send a single key press and release
+static void send_key(uint8_t keycode)
+{
+    uint8_t buffer[8] = {0};
+    buffer[2] = keycode;
+    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    memset(buffer, 0, 8);
+    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
+}
+
+// Read rotary encoder state and return direction
+// Returns: 1=CW, -1=CCW, 0=no change
+static int8_t read_encoder(int clk_pin, int dt_pin, uint8_t *last_state)
+{
+    uint8_t clk = gpio_get_level(clk_pin);
+    uint8_t dt = gpio_get_level(dt_pin);
+    uint8_t state = (clk << 1) | dt;
+
+    int8_t direction = 0;
+    if (state != *last_state) {
+        // Gray code transition table for CW rotation
+        if ((*last_state == 0b00 && state == 0b01) ||
+            (*last_state == 0b01 && state == 0b11) ||
+            (*last_state == 0b11 && state == 0b10) ||
+            (*last_state == 0b10 && state == 0b00)) {
+            direction = 1;  // CW
+        }
+        // Gray code transition table for CCW rotation
+        else if ((*last_state == 0b00 && state == 0b10) ||
+                 (*last_state == 0b10 && state == 0b11) ||
+                 (*last_state == 0b11 && state == 0b01) ||
+                 (*last_state == 0b01 && state == 0b00)) {
+            direction = -1; // CCW
+        }
+        *last_state = state;
+    }
+    return direction;
+}
+
 void ble_hid_demo_task_kbd(void *pvParameters)
 {
-    static const char* help_string = "########################################################################\n"\
-                                      "BT hid keyboard demo usage:\n"\
-                                      "########################################################################\n";
-                                    /* TODO : Add support for function keys and ctrl, alt, esc, etc. */
-    printf("%s\n", help_string);
-    char c;
-    while (1) {
-        c = fgetc(stdin);
+    ESP_LOGI(TAG, "GPIO input task started");
+    gpio_input_init();
 
-        if(c != 255) {
-            send_keyboard(c);
+    // Initialize encoder state tracking
+    uint8_t enc1_state = (gpio_get_level(GPIO_ENC1_CLK) << 1) | gpio_get_level(GPIO_ENC1_DT);
+    uint8_t enc2_state = (gpio_get_level(GPIO_ENC2_CLK) << 1) | gpio_get_level(GPIO_ENC2_DT);
+    int btn_last = 1;  // Pull-up, so 1 = released
+
+    while (1) {
+        // Read encoder 1 (Up/Down arrows)
+        int8_t enc1_dir = read_encoder(GPIO_ENC1_CLK, GPIO_ENC1_DT, &enc1_state);
+        if (enc1_dir == 1) {
+            ESP_LOGI(TAG, "ENC1 CW -> UP");
+            send_key(HID_KEY_UP_ARROW);
+        } else if (enc1_dir == -1) {
+            ESP_LOGI(TAG, "ENC1 CCW -> DOWN");
+            send_key(HID_KEY_DOWN_ARROW);
         }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+
+        // Read encoder 2 (Left/Right arrows)
+        int8_t enc2_dir = read_encoder(GPIO_ENC2_CLK, GPIO_ENC2_DT, &enc2_state);
+        if (enc2_dir == 1) {
+            ESP_LOGI(TAG, "ENC2 CW -> RIGHT");
+            send_key(HID_KEY_RIGHT_ARROW);
+        } else if (enc2_dir == -1) {
+            ESP_LOGI(TAG, "ENC2 CCW -> LEFT");
+            send_key(HID_KEY_LEFT_ARROW);
+        }
+
+        // Read button (Enter key)
+        int btn = gpio_get_level(GPIO_BUTTON);
+        if (btn == 0 && btn_last == 1) {  // Falling edge = press
+            ESP_LOGI(TAG, "BTN -> ENTER");
+            send_key(HID_KEY_ENTER);
+        }
+        btn_last = btn;
+
+        vTaskDelay(pdMS_TO_TICKS(10));  // 10ms polling interval
     }
 }
 #endif
