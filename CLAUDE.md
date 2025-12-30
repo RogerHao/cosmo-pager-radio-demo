@@ -67,11 +67,15 @@ firmware/
 
 ## HID Key Mappings
 
-| Input | HID Key | GPIO Interface |
-|-------|---------|----------------|
-| EC11 #1 rotation | Up/Down arrows | Rotary encoder A/B |
-| EC11 #2 rotation | Left/Right arrows | Rotary encoder A/B |
-| Top button | Enter | Momentary switch |
+| Input | HID Key | GPIO | Notes |
+|-------|---------|------|-------|
+| Top button | Enter | 27 | Directly above encoder GPIOs |
+| EC11 #1 CW | Up arrow | 33 (CLK) | |
+| EC11 #1 CCW | Down arrow | 15 (DT) | |
+| EC11 #2 CW | Right arrow | 32 (CLK) | |
+| EC11 #2 CCW | Left arrow | 14 (DT) | |
+
+All input GPIOs use internal pull-up resistors. Active low (connect to GND when triggered).
 
 ## VS Code Workspace
 
