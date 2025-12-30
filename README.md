@@ -57,7 +57,7 @@ cosmo-pager-radio-demo/
 
 ## 相关项目
 
-- [cosmo-pager-web-nextjs-vercel](https://github.com/user/cosmo-pager-web-nextjs-vercel) - Web 应用前端（由软件团队开发）
+- [cosmo-pager-web-nextjs-vercel](https://github.com/RogerHao/cosmo-pager-web-nextjs-vercel) - Web 应用前端（由软件团队开发）
 
 ## 项目状态
 
