@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1280, height=720, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HID Input Test - Cosmo Pager Radio</title>
     <style>
         :root {
@@ -20,8 +20,8 @@
             --right-circle-left: 1104px;
             --side-circle-top: 302px;
 
-            /* Hardware offset */
-            --offset-x: 17px;
+            /* Hardware offset - 为物理遮罩对齐，根据实际情况调整 */
+            --offset-x: 0px;
 
             /* Retro Radio Color Palette */
             --bg-black: #0a0a0a;
@@ -95,13 +95,26 @@
             box-sizing: border-box;
         }
 
-        body {
-            width: var(--screen-width);
-            height: var(--screen-height);
+        html, body {
+            width: 100%;
+            height: 100%;
             background-color: var(--bg-black);
             overflow: hidden;
             font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+        }
+
+        body {
             position: relative;
+        }
+
+        /* 1280x720 容器，通过 JS 缩放适应屏幕 */
+        .viewport-container {
+            width: 1280px;
+            height: 720px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: center center;
         }
 
         /* Base circle styles */
@@ -140,18 +153,18 @@
         }
 
         .main-circle .station-logo {
-            font-size: 14px;
+            font-size: 24px;
             color: var(--text-dim);
-            letter-spacing: 8px;
+            letter-spacing: 12px;
             text-transform: uppercase;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
 
         .main-circle .main-display {
-            font-size: 120px;
+            font-size: 140px;
             font-weight: bold;
             color: var(--cyan-glow);
-            letter-spacing: 4px;
+            letter-spacing: 6px;
             text-shadow:
                 0 0 20px rgba(0, 212, 170, 0.8),
                 0 0 40px rgba(0, 212, 170, 0.4),
@@ -172,17 +185,17 @@
         }
 
         .main-circle .hint {
-            font-size: 12px;
+            font-size: 20px;
             color: var(--text-dim);
-            letter-spacing: 4px;
+            letter-spacing: 6px;
             text-transform: uppercase;
-            margin-top: 30px;
+            margin-top: 40px;
         }
 
         .main-circle .counter {
-            font-size: 14px;
+            font-size: 22px;
             color: var(--text-label);
-            margin-top: 10px;
+            margin-top: 15px;
         }
 
         /* Scanline overlay for CRT effect */
@@ -232,16 +245,16 @@
 
         .freq-dial .label {
             position: absolute;
-            bottom: 8px;
-            font-size: 8px;
+            bottom: 10px;
+            font-size: 12px;
             color: var(--text-dim);
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             text-transform: uppercase;
         }
 
         .freq-dial .dial-window {
             width: 90%;
-            height: 70px;
+            height: 80px;
             overflow: hidden;
             position: relative;
         }
@@ -250,7 +263,7 @@
             position: absolute;
             width: 100%;
             top: 50%;
-            margin-top: -11px;  /* Half of item height to center */
+            margin-top: -14px;  /* Half of item height to center */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -258,30 +271,30 @@
         }
 
         .freq-dial .freq-item {
-            height: 22px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
+            font-size: 18px;
             font-weight: bold;
             color: var(--amber-dim);
             transition: all 0.15s ease;
         }
 
         .freq-dial .freq-item.active {
-            font-size: 18px;
+            font-size: 24px;
             color: var(--amber-glow);
             animation: pulse-amber 2s ease-in-out infinite;
         }
 
         .freq-dial .freq-item.near {
-            font-size: 12px;
+            font-size: 16px;
             color: var(--amber-dim);
             opacity: 0.6;
         }
 
         .freq-dial .freq-item.far {
-            font-size: 10px;
+            font-size: 14px;
             opacity: 0.3;
         }
 
@@ -291,16 +304,16 @@
             top: 50%;
             transform: translateY(-50%);
             color: var(--red-indicator);
-            font-size: 8px;
+            font-size: 12px;
             z-index: 10;
         }
 
         .freq-dial .indicator.left {
-            left: 4px;
+            left: 6px;
         }
 
         .freq-dial .indicator.right {
-            right: 4px;
+            right: 6px;
         }
 
         .left-circle.active {
@@ -324,16 +337,16 @@
 
         .mode-dial .label {
             position: absolute;
-            bottom: 8px;
-            font-size: 8px;
+            bottom: 10px;
+            font-size: 12px;
             color: var(--text-dim);
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             text-transform: uppercase;
         }
 
         .mode-dial .dial-window {
             width: 100%;
-            height: 50px;
+            height: 60px;
             overflow: hidden;
             position: relative;
             display: flex;
@@ -349,37 +362,37 @@
         }
 
         .mode-dial .mode-item {
-            font-size: 9px;
+            font-size: 14px;
             font-weight: bold;
             color: var(--cyan-dim);
             transition: all 0.15s ease;
             white-space: nowrap;
             opacity: 0.3;
-            width: 32px;
+            width: 42px;
             text-align: center;
             flex-shrink: 0;
         }
 
         .mode-dial .mode-item.active {
-            font-size: 14px;
+            font-size: 20px;
             color: var(--cyan-glow);
             opacity: 1;
             animation: pulse-cyan 2s ease-in-out infinite;
         }
 
         .mode-dial .mode-item.near {
-            font-size: 10px;
+            font-size: 16px;
             opacity: 0.5;
         }
 
         /* Center indicator */
         .mode-dial .indicator {
             position: absolute;
-            top: 8px;
+            top: 10px;
             left: 50%;
             transform: translateX(-50%);
             color: var(--red-indicator);
-            font-size: 6px;
+            font-size: 10px;
             z-index: 10;
         }
 
@@ -443,6 +456,7 @@
     </style>
 </head>
 <body>
+    <div class="viewport-container" id="viewportContainer">
     <!-- Left side circle (Frequency Dial - EC11 #1) -->
     <div class="circle side-circle left-circle" id="leftCircle">
         <div class="tick-marks"></div>
@@ -485,8 +499,27 @@
     <div class="status-bar" id="statusBar">
         Input: <span class="key" id="lastKey">-</span>
     </div>
+    </div><!-- End viewport-container -->
 
     <script>
+        // ==================== 视口缩放 ====================
+        function adjustViewport() {
+            const container = document.getElementById('viewportContainer');
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            // 计算缩放比例
+            const scaleX = viewportWidth / 1280;
+            const scaleY = viewportHeight / 720;
+            const scale = Math.min(scaleX, scaleY);
+
+            // 向右偏移 20px 对齐物理遮罩
+            const offsetX = 25 * scale;
+            container.style.transform = `translate(calc(-50% + ${offsetX}px), -50%) scale(${scale})`;
+        }
+
+        window.addEventListener('load', adjustViewport);
+        window.addEventListener('resize', adjustViewport);
         // ==================== CONFIGURATION ====================
         const CONFIG = {
             freq: {
@@ -499,8 +532,8 @@
             modes: ['FM', 'AM', 'SW', 'LW', 'MW'],
             animation: {
                 duration: 350,  // Slower, smoother scroll
-                itemHeight: 22,  // px - must match CSS
-                modeItemWidth: 32  // px - width of mode items (must match CSS)
+                itemHeight: 28,  // px - must match CSS .freq-item height
+                modeItemWidth: 42  // px - must match CSS .mode-item width
             }
         };
 
