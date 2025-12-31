@@ -389,6 +389,7 @@ static void send_key(uint8_t keycode)
 
 // Read rotary encoder state and return direction
 // Returns: 1=CW, -1=CCW, 0=no change
+// Only triggers once per detent (at the 11->10 or 11->01 transition)
 static int8_t read_encoder(int clk_pin, int dt_pin, uint8_t *last_state)
 {
     uint8_t clk = gpio_get_level(clk_pin);
@@ -397,18 +398,11 @@ static int8_t read_encoder(int clk_pin, int dt_pin, uint8_t *last_state)
 
     int8_t direction = 0;
     if (state != *last_state) {
-        // Gray code transition table for CW rotation
-        if ((*last_state == 0b00 && state == 0b01) ||
-            (*last_state == 0b01 && state == 0b11) ||
-            (*last_state == 0b11 && state == 0b10) ||
-            (*last_state == 0b10 && state == 0b00)) {
+        // Only trigger at detent position (state 11 -> next state)
+        // This ensures one event per physical "click"
+        if (*last_state == 0b11 && state == 0b10) {
             direction = 1;  // CW
-        }
-        // Gray code transition table for CCW rotation
-        else if ((*last_state == 0b00 && state == 0b10) ||
-                 (*last_state == 0b10 && state == 0b11) ||
-                 (*last_state == 0b11 && state == 0b01) ||
-                 (*last_state == 0b01 && state == 0b00)) {
+        } else if (*last_state == 0b11 && state == 0b01) {
             direction = -1; // CCW
         }
         *last_state = state;
