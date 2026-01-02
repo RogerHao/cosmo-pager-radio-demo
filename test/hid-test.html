@@ -12,13 +12,13 @@
 
             /* Calculated sizes */
             --main-circle-size: 720px;
-            --side-hole-size: 116px;
+            --side-hole-size: 174px;  /* 116 * 1.5 = 174 */
 
             /* Positions */
             --main-left: 280px;
-            --left-circle-left: 60px;
-            --right-circle-left: 1104px;
-            --side-circle-top: 302px;
+            --left-circle-left: 31px;   /* 60 - 29 (compensate for size increase) */
+            --right-circle-left: 1075px; /* 1104 - 29 */
+            --side-circle-top: 271px;    /* 273 - 2 */
 
             /* Hardware offset - 为物理遮罩对齐，根据实际情况调整 */
             --offset-x: 0px;
@@ -513,8 +513,8 @@
             const scaleY = viewportHeight / 720;
             const scale = Math.min(scaleX, scaleY);
 
-            // 向右偏移 20px 对齐物理遮罩
-            const offsetX = 25 * scale;
+            // 向右偏移对齐物理遮罩
+            const offsetX = 21 * scale;
             container.style.transform = `translate(calc(-50% + ${offsetX}px), -50%) scale(${scale})`;
         }
 
