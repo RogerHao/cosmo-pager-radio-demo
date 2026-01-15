@@ -24,7 +24,7 @@
 | 组件 | 规格 | 用途 |
 |------|------|------|
 | E5 Ultra | 5寸IPS屏/T620芯片/6+128G/5000mAh | 主机，运行 Web 应用 |
-| Adafruit HUZZAH32 | ESP32 WROOM32/BT+WiFi | 蓝牙 HID 控制器 |
+| XIAO ESP32S3 | ESP32-S3/BLE 5.0/8MB Flash | 蓝牙 HID 控制器 |
 | EC11 旋钮 x2 | 旋转编码器 | 频率调节/模式切换 |
 | 微动开关 x1 | 顶部条状按钮 | 确认操作 |
 
@@ -57,8 +57,10 @@ cosmo-pager-radio-demo/
     ├── main/
     │   ├── esp_hid_device_main.c       # 主程序：GPIO 输入 + HID 发送
     │   ├── esp_hid_gap.c               # BLE GAP/GATT 连接管理
+    │   ├── Kconfig.projbuild           # HID 设备角色配置
     │   └── CMakeLists.txt
-    ├── sdkconfig.defaults              # 构建配置（NimBLE + 键盘模式）
+    ├── sdkconfig.defaults              # 通用构建配置
+    ├── sdkconfig.defaults.esp32s3      # ESP32-S3 特定配置（NimBLE + 键盘模式）
     └── CMakeLists.txt
 ```
 
@@ -72,7 +74,8 @@ cosmo-pager-radio-demo/
 - [x] 外壳 3D 建模（进行中）
 - [x] ESP32 供电方案验证
 - [x] ESP32 固件开发 - GPIO 输入 + BLE HID 键盘
-- [ ] 硬件接线与功能测试
+- [x] 硬件迁移：HUZZAH32 → XIAO ESP32S3
+- [x] 硬件接线与功能测试
 - [ ] 外壳 3D 打印与组装
 - [ ] 整机调试
 
@@ -88,8 +91,9 @@ cosmo-pager-radio-demo/
 ```bash
 cd firmware
 get_idf                                    # 激活 ESP-IDF 环境
+idf.py set-target esp32s3                  # 设置目标芯片（首次）
 idf.py build                               # 构建
-idf.py -p /dev/cu.usbserial-0001 flash     # 烧录
+idf.py -p /dev/cu.usbmodem* flash monitor  # 烧录并监控
 ```
 
 ## 文档索引

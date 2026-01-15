@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hardware mod project: Converting E5 Ultra Android handheld into a desktop "Parallel Universe Radio" device with custom input controls via ESP32 BLE HID.
 
-**Architecture**: E5 Ultra (Android host) <-- BLE HID --> ESP32 HUZZAH32 <-- GPIO --> EC11 rotary encoders + button
+**Architecture**: E5 Ultra (Android host) <-- BLE HID --> XIAO ESP32S3 <-- GPIO --> EC11 rotary encoders + button
 
 ## Build Commands
 
@@ -17,19 +17,19 @@ All firmware commands must be run from the `firmware/` directory with ESP-IDF en
 get_idf
 
 # Set target chip (first time only)
-idf.py set-target esp32
+idf.py set-target esp32s3
 
 # Build firmware
 idf.py build
 
 # Flash to device
-idf.py -p /dev/cu.usbserial-0001 flash
+idf.py -p /dev/cu.usbmodem* flash
 
 # Monitor serial output
-idf.py -p /dev/cu.usbserial-0001 monitor
+idf.py -p /dev/cu.usbmodem* monitor
 
 # Build + Flash + Monitor combined
-idf.py -p /dev/cu.usbserial-0001 flash monitor
+idf.py -p /dev/cu.usbmodem* flash monitor
 
 # Open menuconfig for configuration
 idf.py menuconfig
@@ -45,9 +45,9 @@ Configuration is driven by `firmware/sdkconfig.defaults`. Key settings:
 | Setting | Value | Purpose |
 |---------|-------|---------|
 | `CONFIG_BT_NIMBLE_ENABLED` | y | Use NimBLE stack (lighter than Bluedroid) |
-| `CONFIG_BTDM_CTRL_MODE_BLE_ONLY` | y | BLE only, no Classic BT |
 | `CONFIG_EXAMPLE_KBD_ENABLE` | y | HID Keyboard mode |
 | `CONFIG_BT_NIMBLE_MAX_CONNECTIONS` | 1 | Single device connection |
+| `CONFIG_ESPTOOLPY_FLASHSIZE_8MB` | y | XIAO ESP32S3 flash size |
 
 To change HID device role, modify `CONFIG_EXAMPLE_*_ENABLE` in sdkconfig.defaults or use menuconfig: `HID Example Configuration > HID Device Role`.
 
@@ -67,13 +67,13 @@ firmware/
 
 ## HID Key Mappings
 
-| Input | HID Key | GPIO | Notes |
-|-------|---------|------|-------|
-| Top button | Enter | 27 | Directly above encoder GPIOs |
-| EC11 #1 CW | Up arrow | 33 (CLK) | |
-| EC11 #1 CCW | Down arrow | 15 (DT) | |
-| EC11 #2 CW | Right arrow | 32 (CLK) | |
-| EC11 #2 CCW | Left arrow | 14 (DT) | |
+| Input | HID Key | GPIO | XIAO Pin |
+|-------|---------|------|----------|
+| Top button | Enter | 1 | D0 |
+| EC11 #1 CW | Up arrow | 2 (CLK) | D1 |
+| EC11 #1 CCW | Down arrow | 3 (DT) | D2 |
+| EC11 #2 CW | Right arrow | 4 (CLK) | D3 |
+| EC11 #2 CCW | Left arrow | 5 (DT) | D4 |
 
 All input GPIOs use internal pull-up resistors. Active low (connect to GND when triggered).
 
@@ -88,9 +88,9 @@ This allows the ESP-IDF extension to recognize `firmware/` as a separate ESP-IDF
 
 ## Hardware Target
 
-- **Board**: Adafruit HUZZAH32 (ESP32 WROOM32)
-- **Power**: 3.5-3.7V from E5 Ultra mainboard → HUZZAH32 BAT pin
-- **Flash**: 4MB
+- **Board**: Seeed Studio XIAO ESP32S3
+- **Power**: 3.7V Li-battery → XIAO B+/B- pads (on back)
+- **Flash**: 8MB
 
 ## HID Input Test Tool
 

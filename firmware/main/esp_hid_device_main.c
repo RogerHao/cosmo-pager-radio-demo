@@ -41,12 +41,12 @@
 #include "esp_hid_gap.h"
 #include "driver/gpio.h"
 
-// GPIO pin definitions for input devices
-#define GPIO_BUTTON     27
-#define GPIO_ENC1_CLK   33
-#define GPIO_ENC1_DT    15
-#define GPIO_ENC2_CLK   32
-#define GPIO_ENC2_DT    14
+// GPIO pin definitions for input devices (XIAO ESP32S3)
+#define GPIO_BUTTON     1   // D0
+#define GPIO_ENC1_CLK   2   // D1
+#define GPIO_ENC1_DT    3   // D2
+#define GPIO_ENC2_CLK   4   // D3
+#define GPIO_ENC2_DT    5   // D4
 
 // HID key codes for arrow keys and enter
 #define HID_KEY_ENTER       0x28
@@ -379,6 +379,10 @@ static void gpio_input_init(void)
 // Send a single key press and release
 static void send_key(uint8_t keycode)
 {
+    // Only send HID report if device is connected
+    if (s_ble_hid_param.hid_dev == NULL) {
+        return;  // No connection, just log (log is done by caller)
+    }
     uint8_t buffer[8] = {0};
     buffer[2] = keycode;
     esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
@@ -1061,5 +1065,8 @@ void app_main(void)
     if (ret) {
         ESP_LOGE(TAG, "esp_nimble_enable failed: %d", ret);
     }
+
+    // Start GPIO input task immediately for testing (even without BLE connection)
+    ble_hid_task_start_up();
 #endif
 }

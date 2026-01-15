@@ -1,96 +1,89 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | -------- |
+# Cosmo Pager Radio - ESP32 BLE HID Firmware
 
-# ESP-IDF BT/BLE HID Device Demo
+基于 ESP-IDF 的 BLE HID 键盘固件，用于 Cosmo Pager Radio 项目。
 
-This demo use APIs which esp_hid component provided to create a BT, BLE or Bluetooth dual mode hid device. Users can choose mode by setting `HID_DEV_MODE`.
+## 硬件要求
 
+| 组件 | 规格 | 连接 |
+|------|------|------|
+| XIAO ESP32S3 | Seeed Studio | 主控 |
+| EC11 旋转编码器 x2 | 增量式编码器 | D1/D2, D3/D4 |
+| 按钮 x1 | 常开按钮 | D0 |
 
-This example works in companion with the [BLE HID Host Example](../esp_hid_host/README.md)
+## GPIO 引脚映射
 
-## How to Use Example
+| 功能 | GPIO | XIAO 引脚 | HID 按键 |
+|------|------|----------|----------|
+| 按钮 | 1 | D0 | Enter |
+| 编码器1 CLK | 2 | D1 | Up |
+| 编码器1 DT | 3 | D2 | Down |
+| 编码器2 CLK | 4 | D3 | Right |
+| 编码器2 DT | 5 | D4 | Left |
 
-Before project configuration and build, be sure to set the correct chip target using:
+所有输入 GPIO 使用内部上拉电阻，低电平有效（接 GND 触发）。
+
+## 电源接线
+
+XIAO ESP32S3 背面有电池焊盘，支持 3.7V 锂电池直接供电：
+
+- **B+**: 电池正极（远离 USB 口）
+- **B-**: 电池负极（靠近 USB 口）
+
+## 构建与烧录
 
 ```bash
-idf.py set-target <chip_name>
-```
-The BT hid device plays as a mouse. When the connection is successfully established, users can follow the usage below to operate the 'mouse'.
+# 激活 ESP-IDF 环境
+get_idf
 
-```
-########################################################################
-BT hid mouse demo usage:
-You can input these value to simulate mouse: 'q', 'w', 'e', 'a', 's', 'd', 'h'
-q -- click the left key
-w -- move up
-e -- click the right key
-a -- move left
-s -- move down
-d -- move right
-h -- show the help
-########################################################################
+# 设置目标芯片（首次）
+idf.py set-target esp32s3
+
+# 构建
+idf.py build
+
+# 烧录并监控
+idf.py -p /dev/cu.usbmodem* flash monitor
 ```
 
-The BLE hid device plays as a remote control. When the connection is successfully established, the remote control will set volume up and down periodically.
-This example implements a BLE HID device.
+退出监控：`Ctrl+]`
 
-### Hardware Required
+## 配置说明
 
-* A development board with ESP32 SoC (e.g., ESP32-DevKitC, ESP-WROVER-KIT, etc.)
-* A USB cable for Power supply and programming
+配置文件：
+- `sdkconfig.defaults` - 通用配置
+- `sdkconfig.defaults.esp32s3` - ESP32-S3 特定配置
 
-See [Development Boards](https://www.espressif.com/en/products/devkits) for more information about it.
+关键配置项：
+| 配置 | 值 | 说明 |
+|------|-----|------|
+| `CONFIG_BT_NIMBLE_ENABLED` | y | 使用 NimBLE 协议栈 |
+| `CONFIG_EXAMPLE_KBD_ENABLE` | y | HID 键盘模式 |
+| `CONFIG_ESPTOOLPY_FLASHSIZE_8MB` | y | 8MB Flash |
 
-### Configure the Project
-
-### Build and Flash
-
-Build the project and flash it to the board, then run monitor tool to view serial output.
-
-```
-idf.py -p PORT flash monitor
-```
-
-(To exit the serial monitor, type ``Ctrl-]``.)
-
-See the [Getting Started Guide](https://idf.espressif.com/) for full steps to configure and use ESP-IDF to build projects.
-
-## Example Output
+## 预期输出
 
 ```
-I (0) cpu_start: Starting scheduler on APP CPU.
-I (607) BTDM_INIT: BT controller compile version [d03a5d3]
-I (607) system_api: Base MAC address is not set
-I (607) system_api: read default base MAC address from EFUSE
-I (617) phy_init: phy_version 4670,719f9f6,Feb 18 2021,17:07:07
-W (1337) BT_BTM: BTM_BleWriteAdvData, Partial data write into ADV
-I (1357) HID_DEV_DEMO: START
-I (25067) HID_DEV_DEMO: CONNECT
-I (25357) HID_DEV_DEMO: Send the volume
-E (25437) BT_SMP: Value for numeric comparison = 125657
-I (25437) ESP_HID_GAP: BLE GAP NC_REQ passkey:125657
-W (25517) BT_SMP: FOR LE SC LTK IS USED INSTEAD OF STK
-I (25587) ESP_HID_GAP: BLE GAP KEY type = ESP_LE_KEY_LENC
-I (25587) ESP_HID_GAP: BLE GAP KEY type = ESP_LE_KEY_PENC
-I (25587) ESP_HID_GAP: BLE GAP KEY type = ESP_LE_KEY_LID
-I (25647) ESP_HID_GAP: BLE GAP KEY type = ESP_LE_KEY_PID
-I (25757) ESP_HID_GAP: BLE GAP AUTH SUCCESS
-I (27457) HID_DEV_DEMO: Send the volume
-I (29557) HID_DEV_DEMO: Send the volume
-I (31657) HID_DEV_DEMO: Send the volume
-I (33757) HID_DEV_DEMO: Send the volume
-I (35857) HID_DEV_DEMO: Send the volume
-I (37957) HID_DEV_DEMO: Send the volume
-I (40057) HID_DEV_DEMO: Send the volume
-I (42157) HID_DEV_DEMO: Send the volume
-I (44257) HID_DEV_DEMO: Send the volume
-I (46357) HID_DEV_DEMO: Send the volume
-I (48457) HID_DEV_DEMO: Send the volume
-I (50557) HID_DEV_DEMO: Send the volume
-...
+I (367) HID_DEV_DEMO: setting hid gap, mode:2
+I (457) HID_DEV_DEMO: GPIO input task started
+I (457) HID_DEV_DEMO: GPIO input initialized: BTN=1, ENC1=2/3, ENC2=4/5
+I (457) HID_DEV_BLE: START
 ```
 
-## Troubleshooting
+按下按钮或转动旋钮时：
+```
+I (xxxxx) HID_DEV_DEMO: BTN -> ENTER
+I (xxxxx) HID_DEV_DEMO: ENC1 CW -> UP
+I (xxxxx) HID_DEV_DEMO: ENC2 CCW -> LEFT
+```
 
-1. When using NimBLE stack, some iOS devices do not show the volume pop up. To fix this, please set CONFIG_BT_NIMBLE_SM_LVL to value 2. iOS needs Authenticated Pairing with Encryption to show up the pop ups.
-2. For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you soon.
+## 蓝牙配对
+
+设备名称：`CosmoPager Radio`
+
+配对方式：Just Works（无需 PIN 码）
+
+## 故障排除
+
+1. **看不到 GPIO 日志**：确认 `mode:2`（键盘模式），如果是 `mode:1` 说明配置错误
+2. **按钮无反应**：检查接线是否正确（按钮一端接 D0，另一端接 GND）
+3. **无法烧录**：按住 BOOT 按钮再插入 USB 进入下载模式

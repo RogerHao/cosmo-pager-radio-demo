@@ -1,6 +1,6 @@
 # =============================================================================
 # Cosmo Pager Radio - ESP32 BLE HID Keyboard Configuration
-# Target: Adafruit HUZZAH32 (ESP32 WROOM32)
+# Target: Seeed Studio XIAO ESP32S3
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -9,10 +9,9 @@
 # Enable Bluetooth
 CONFIG_BT_ENABLED=y
 
-# Use BLE only mode (saves ~50KB RAM vs dual mode)
-CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
-
 # Use NimBLE stack (lighter than Bluedroid, ~30KB smaller)
+# Must explicitly disable Bluedroid since it's the default in choice BT_HOST
+CONFIG_BT_BLUEDROID_ENABLED=n
 CONFIG_BT_NIMBLE_ENABLED=y
 
 # NimBLE HID Service
@@ -44,8 +43,8 @@ CONFIG_EXAMPLE_KBD_ENABLE=y
 # Use large single app partition (more space for code)
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 
-# Flash size for HUZZAH32 (4MB)
-CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+# Flash size for XIAO ESP32S3 (8MB)
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 
 # -----------------------------------------------------------------------------
 # Power Management (optional, for battery optimization)
