@@ -78,7 +78,7 @@ I (xxxxx) HID_DEV_DEMO: ENC2 CCW -> LEFT
 
 ## 蓝牙配对
 
-设备名称：`CosmoPager Radio`
+设备名称：`cosmo-radio-input`
 
 配对方式：Just Works（无需 PIN 码）
 
