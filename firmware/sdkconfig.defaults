@@ -47,11 +47,12 @@ CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 
 # -----------------------------------------------------------------------------
-# Power Management (optional, for battery optimization)
+# Power Management
 # -----------------------------------------------------------------------------
-# Enable light sleep when idle
-# CONFIG_PM_ENABLE=y
-# CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+# Disable tickless idle to prevent BLE disconnection issues
+# With optimized connection parameters (~200µA), 3000mAh battery lasts months
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=n
 
 # -----------------------------------------------------------------------------
 # Logging (reduce for production)

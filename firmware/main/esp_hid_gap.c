@@ -802,6 +802,20 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
 
 }
 
+// Connection state for reconnection logic
+typedef enum {
+    CONN_STATE_IDLE = 0,
+    CONN_STATE_ADVERTISING,
+    CONN_STATE_CONNECTED,
+    CONN_STATE_DISCONNECTED,
+} conn_state_t;
+
+static conn_state_t s_conn_state = CONN_STATE_IDLE;
+static uint16_t s_conn_handle = 0;
+
+// Forward declaration
+static void start_advertising_with_retry(void);
+
 static int
 nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
 {
@@ -814,10 +828,42 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
         ESP_LOGI(TAG, "connection %s; status=%d",
                 event->connect.status == 0 ? "established" : "failed",
                 event->connect.status);
+        if (event->connect.status == 0) {
+            s_conn_state = CONN_STATE_CONNECTED;
+            s_conn_handle = event->connect.conn_handle;
+            ESP_LOGI(TAG, "Connected, handle=%d", s_conn_handle);
+
+            // Optimize connection parameters for lower power consumption
+            // while maintaining acceptable latency for HID input
+            struct ble_gap_upd_params conn_params = {
+                .itvl_min = 40,             // 50ms (40 * 1.25ms)
+                .itvl_max = 80,             // 100ms (80 * 1.25ms)
+                .latency = 5,               // Allow skipping up to 5 connection events
+                .supervision_timeout = 500, // 5 seconds (500 * 10ms)
+            };
+            rc = ble_gap_update_params(s_conn_handle, &conn_params);
+            if (rc != 0) {
+                ESP_LOGW(TAG, "Failed to update connection params: %d", rc);
+            } else {
+                ESP_LOGI(TAG, "Connection params update requested");
+            }
+        } else {
+            // Connection failed, restart advertising
+            s_conn_state = CONN_STATE_DISCONNECTED;
+            ESP_LOGW(TAG, "Connection failed, restarting advertising");
+            start_advertising_with_retry();
+        }
         return 0;
         break;
     case BLE_GAP_EVENT_DISCONNECT:
-        ESP_LOGI(TAG, "disconnect; reason=%d", event->disconnect.reason);
+        ESP_LOGI(TAG, "disconnect; reason=%d (0x%02x)",
+                 event->disconnect.reason, event->disconnect.reason);
+        s_conn_state = CONN_STATE_DISCONNECTED;
+        s_conn_handle = 0;
+
+        // Auto-restart advertising after disconnect
+        ESP_LOGI(TAG, "Auto-restarting advertising after disconnect");
+        start_advertising_with_retry();
 
         return 0;
     case BLE_GAP_EVENT_CONN_UPDATE:
@@ -827,8 +873,12 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
         return 0;
 
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        ESP_LOGI(TAG, "advertise complete; reason=%d",
-                event->adv_complete.reason);
+        ESP_LOGI(TAG, "advertise complete; reason=%d", event->adv_complete.reason);
+        // If not connected, restart advertising
+        if (s_conn_state != CONN_STATE_CONNECTED) {
+            ESP_LOGI(TAG, "Advertising timeout, restarting...");
+            start_advertising_with_retry();
+        }
         return 0;
 
     case BLE_GAP_EVENT_SUBSCRIBE:
@@ -920,12 +970,33 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
     }
     return 0;
 }
+// Helper to restart advertising with error handling
+static void start_advertising_with_retry(void)
+{
+    // Small delay before restarting to avoid rapid cycling
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    int rc = esp_hid_ble_gap_adv_start();
+    if (rc != 0) {
+        ESP_LOGW(TAG, "Failed to restart advertising: %d, will retry", rc);
+        // Schedule another retry after longer delay
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        rc = esp_hid_ble_gap_adv_start();
+        if (rc != 0) {
+            ESP_LOGE(TAG, "Advertising restart failed again: %d", rc);
+        }
+    } else {
+        s_conn_state = CONN_STATE_ADVERTISING;
+        ESP_LOGI(TAG, "Advertising restarted successfully");
+    }
+}
+
 esp_err_t esp_hid_ble_gap_adv_start(void)
 {
     int rc;
     struct ble_gap_adv_params adv_params;
-    /* maximum possible duration for hid device(180s) */
-    int32_t adv_duration_ms = 180000;
+    /* Indefinite advertising for HID device (0 = no timeout) */
+    int32_t adv_duration_ms = BLE_HS_FOREVER;
 
     rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {

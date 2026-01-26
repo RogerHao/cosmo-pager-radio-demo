@@ -1,8 +1,10 @@
 set(srcs "esp_hid_device_main.c"
-         "esp_hid_gap.c")
+         "esp_hid_gap.c"
+         "device_identity.c"
+         "input_handler.c")
 set(include_dirs ".")
 
 idf_component_register(SRCS "${srcs}"
                        INCLUDE_DIRS "${include_dirs}"
                        REQUIRES esp_hid
-                       PRIV_REQUIRES nvs_flash esp_driver_gpio)
+                       PRIV_REQUIRES nvs_flash esp_driver_gpio esp_timer esp_hw_support)
