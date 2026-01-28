@@ -42,6 +42,7 @@
 #include "driver/gpio.h"
 #include "device_identity.h"
 #include "input_handler.h"
+#include "led_indicator.h"
 
 // HID key codes for arrow keys and enter
 // Note: GPIO definitions are in input_handler.c
@@ -394,10 +395,12 @@ static void on_input_event(const input_event_t *event)
     switch (event->type) {
     case INPUT_EVENT_BUTTON_PRESS:
         ESP_LOGI(TAG, "BTN -> ENTER (pressed)");
+        led_indicator_red();  // LED on (red) when button pressed
         send_key_down(HID_KEY_ENTER);
         break;
     case INPUT_EVENT_BUTTON_RELEASE:
         ESP_LOGI(TAG, "BTN -> ENTER (released)");
+        led_indicator_off();  // LED off when button released
         send_key_up();
         break;
     case INPUT_EVENT_ENC1_CW:
@@ -992,6 +995,10 @@ void app_main(void)
 
     // Initialize device identity (must be after NVS init)
     ret = device_identity_init();
+    ESP_ERROR_CHECK( ret );
+
+    // Initialize LED indicator (WS2812 on D5)
+    ret = led_indicator_init();
     ESP_ERROR_CHECK( ret );
 
     // Set dynamic device name and serial number
