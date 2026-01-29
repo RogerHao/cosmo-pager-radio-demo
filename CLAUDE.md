@@ -110,6 +110,16 @@ test/hid-test.html
 
 **Usage:** Transfer to device and open in browser for HID input testing.
 
+## Known Limitations / Technical Debt
+
+### HID Key Report: No Multi-key Support
+
+Current `send_key_up()` releases ALL keys (sends empty report), not a specific key. This is fine for current single-button use case, but will cause issues if:
+- User holds button while rotating encoder
+- Future features require modifier keys (Shift+Enter, etc.)
+
+**Fix when needed**: Maintain a `pressed_keys[6]` state array, add/remove individual keycodes, and send updated report on each change. See conversation history for implementation sketch.
+
 ## Documentation Language
 
 - Code comments: English

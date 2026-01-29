@@ -1,4 +1,13 @@
 menu "HID Example Configuration"
+    config DEVICE_NUMBER
+        int "Device Number (01-99)"
+        range 0 99
+        default 0
+        help
+            Unique device number for BLE name (cosmo-XX).
+            Set 1-99 to assign a number, 0 means unassigned.
+            Example: 1 -> "cosmo-01", 12 -> "cosmo-12"
+
     config EXAMPLE_SSP_ENABLED
         bool "Secure Simple Pairing"
         depends on BT_CLASSIC_ENABLED

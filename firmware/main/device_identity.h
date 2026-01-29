@@ -6,6 +6,7 @@
 #ifndef _DEVICE_IDENTITY_H_
 #define _DEVICE_IDENTITY_H_
 
+#include <stdint.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -15,9 +16,10 @@ extern "C" {
 // Maximum length for device name (BLE limit is 29 bytes for name in adv data)
 #define DEVICE_NAME_MAX_LEN 20
 
-// NVS namespace and key for custom device name
+// NVS namespace and keys
 #define DEVICE_NVS_NAMESPACE "device_id"
 #define DEVICE_NVS_KEY_NAME "custom_name"
+#define DEVICE_NVS_KEY_ID   "device_num"    // Device number (1-99)
 
 /**
  * Initialize device identity system
@@ -30,11 +32,18 @@ esp_err_t device_identity_init(void);
 
 /**
  * Get device name for BLE advertising
- * Priority: 1) NVS custom name, 2) MAC-based name (cosmo-XXXX)
+ * Priority: 1) NVS custom name, 2) Number-based name (cosmo-XX), 3) MAC fallback (cosmo-??)
  *
  * @return Pointer to static device name string
  */
 const char* device_identity_get_name(void);
+
+/**
+ * Get device number (1-99)
+ *
+ * @return Device number, or 0 if not set
+ */
+uint8_t device_identity_get_number(void);
 
 /**
  * Get device serial number (full MAC address)
@@ -53,11 +62,20 @@ const char* device_identity_get_serial(void);
 esp_err_t device_identity_set_name(const char* name);
 
 /**
- * Reset device name to MAC-based default (removes custom name from NVS)
+ * Reset device name to number-based default (removes custom name from NVS)
  *
  * @return ESP_OK on success
  */
 esp_err_t device_identity_reset_name(void);
+
+/**
+ * Set device number (1-99), persisted to NVS
+ * This generates device name as "cosmo-XX" (e.g., "cosmo-01", "cosmo-12")
+ *
+ * @param num Device number (1-99)
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of range
+ */
+esp_err_t device_identity_set_number(uint8_t num);
 
 #ifdef __cplusplus
 }

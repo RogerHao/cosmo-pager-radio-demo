@@ -78,6 +78,26 @@ esp_err_t esp_hid_gap_init(uint8_t mode);
 esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name);
 esp_err_t esp_hid_ble_gap_adv_start(void);
 
+#if CONFIG_BT_NIMBLE_ENABLED
+/**
+ * @brief Start/stop keepalive task for connection monitoring
+ */
+void keepalive_start(void);
+void keepalive_stop(void);
+
+/**
+ * @brief Check if currently connected
+ * @return true if BLE HID is connected
+ */
+bool esp_hid_ble_is_connected(void);
+
+/**
+ * @brief Get current connection handle
+ * @return Connection handle or 0 if not connected
+ */
+uint16_t esp_hid_ble_get_conn_handle(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
