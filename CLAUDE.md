@@ -4,17 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hardware mod project: Converting E5 Ultra Android handheld into a desktop "Parallel Universe Radio" device with custom input controls via ESP32 BLE HID.
+Hardware mod project: Building a desktop "Parallel Universe Radio" device using an Android tablet with custom input controls via ESP32 HID (BLE or USB).
 
-**Architecture**: E5 Ultra (Android host) <-- BLE HID --> XIAO ESP32S3 <-- GPIO --> EC11 rotary encoders + button
+**Architecture**: Android Tablet <-- HID (BLE/USB) --> XIAO ESP32S3 <-- GPIO --> EC11 rotary encoders + button + WS2812 LED
+
+## Firmware Options
+
+The project supports two HID implementations:
+
+| Firmware | Directory | Connection | Use Case |
+|----------|-----------|------------|----------|
+| BLE HID | `firmware/` | Bluetooth Low Energy | Wireless, battery-powered |
+| USB HID | `tusb_hid/` | USB cable | Wired, more stable, lower latency |
 
 ## Build Commands
 
-All firmware commands must be run from the `firmware/` directory with ESP-IDF environment active:
+All firmware commands require ESP-IDF environment active:
 
 ```bash
 # Initialize ESP-IDF environment (if using get_idf alias)
 get_idf
+
+# For BLE HID firmware
+cd firmware
+
+# For USB HID firmware
+cd tusb_hid
 
 # Set target chip (first time only)
 idf.py set-target esp32s3
@@ -31,51 +46,67 @@ idf.py -p /dev/cu.usbmodem* monitor
 # Build + Flash + Monitor combined
 idf.py -p /dev/cu.usbmodem* flash monitor
 
-# Open menuconfig for configuration
-idf.py menuconfig
-
 # Clean build
 idf.py fullclean
 ```
 
-## Key Configuration
-
-Configuration is driven by `firmware/sdkconfig.defaults`. Key settings:
-
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `CONFIG_BT_NIMBLE_ENABLED` | y | Use NimBLE stack (lighter than Bluedroid) |
-| `CONFIG_EXAMPLE_KBD_ENABLE` | y | HID Keyboard mode |
-| `CONFIG_BT_NIMBLE_MAX_CONNECTIONS` | 1 | Single device connection |
-| `CONFIG_ESPTOOLPY_FLASHSIZE_8MB` | y | XIAO ESP32S3 flash size |
-
-To change HID device role, modify `CONFIG_EXAMPLE_*_ENABLE` in sdkconfig.defaults or use menuconfig: `HID Example Configuration > HID Device Role`.
-
 ## Code Architecture
 
 ```
-firmware/
+firmware/                          # BLE HID implementation
 ├── main/
-│   ├── esp_hid_device_main.c   # Entry point, HID report maps, input handling
-│   ├── esp_hid_gap.c           # BLE GAP/GATT, pairing, connection management
-│   └── esp_hid_gap.h           # HID mode definitions (BLE/BTDM)
-├── sdkconfig.defaults          # Source of truth for build config
-└── CMakeLists.txt              # IDF project setup
+│   ├── esp_hid_device_main.c      # Entry point, BLE HID + input handling
+│   ├── esp_hid_gap.c              # BLE GAP/GATT, pairing, connection
+│   ├── input_handler.c/h          # GPIO interrupt-based input
+│   └── led_indicator.c/h          # WS2812 LED control
+├── sdkconfig.defaults
+└── CMakeLists.txt
+
+tusb_hid/                          # USB HID implementation
+├── main/
+│   ├── tusb_hid_example_main.c    # Entry point, USB HID + input handling
+│   ├── input_handler.c/h          # GPIO interrupt-based input (shared)
+│   └── led_indicator.c/h          # WS2812 LED control (shared)
+├── sdkconfig.defaults
+└── CMakeLists.txt
 ```
 
-**Conditional compilation**: Code supports both Bluedroid (`CONFIG_BT_BLE_ENABLED`) and NimBLE (`CONFIG_BT_NIMBLE_ENABLED`) stacks. Current config uses NimBLE only.
+**Shared modules**: `input_handler` and `led_indicator` are protocol-agnostic and identical in both firmware projects.
+
+## GPIO Pin Assignments
+
+| GPIO | XIAO Pin | Function | Module |
+|------|----------|----------|--------|
+| 1 | D0 | Button | input_handler |
+| 2 | D1 | Encoder 1 CLK | input_handler |
+| 3 | D2 | Encoder 1 DT | input_handler |
+| 4 | D3 | Encoder 2 CLK | input_handler |
+| 5 | D4 | Encoder 2 DT | input_handler |
+| 6 | D5 | WS2812 LED | led_indicator |
+| 19 | — | USB D- | TinyUSB (native) |
+| 20 | — | USB D+ | TinyUSB (native) |
+
+All input GPIOs use internal pull-up resistors. Active low (connect to GND when triggered).
 
 ## HID Key Mappings
 
-| Input | HID Key | GPIO | XIAO Pin |
-|-------|---------|------|----------|
-| Top button | Enter | 1 | D0 |
-| EC11 #1 CW | Up arrow | 2 (CLK) | D1 |
-| EC11 #1 CCW | Down arrow | 3 (DT) | D2 |
-| EC11 #2 CW | Right arrow | 4 (CLK) | D3 |
-| EC11 #2 CCW | Left arrow | 5 (DT) | D4 |
+| Input | HID Key | Description |
+|-------|---------|-------------|
+| Button press | Enter | Confirm action |
+| Button release | (key up) | |
+| Encoder 1 CW | ↑ Up arrow | Frequency up |
+| Encoder 1 CCW | ↓ Down arrow | Frequency down |
+| Encoder 2 CW | → Right arrow | Mode next |
+| Encoder 2 CCW | ← Left arrow | Mode previous |
 
-All input GPIOs use internal pull-up resistors. Active low (connect to GND when triggered).
+## LED Indicator Behavior
+
+| Event | LED Color |
+|-------|-----------|
+| Button pressed | Red |
+| Button released | Off |
+| USB/BLE connected | Blue flash |
+| Startup | Green flash |
 
 ## VS Code Workspace
 
@@ -84,13 +115,12 @@ Use the multi-root workspace for proper ESP-IDF extension support:
 code cosmo-pager-radio.code-workspace
 ```
 
-This allows the ESP-IDF extension to recognize `firmware/` as a separate ESP-IDF project.
-
 ## Hardware Target
 
 - **Board**: Seeed Studio XIAO ESP32S3
-- **Power**: 3.7V Li-battery → XIAO B+/B- pads (on back)
+- **Power**: USB or 3.7V Li-battery → XIAO B+/B- pads
 - **Flash**: 8MB
+- **LED**: WS2812 RGB on GPIO6 (D5)
 
 ## HID Input Test Tool
 
@@ -110,6 +140,11 @@ test/hid-test.html
 
 **Usage:** Transfer to device and open in browser for HID input testing.
 
+## Special Features
+
+### Force Restart
+Hold the button for 15 seconds to trigger a device restart. Useful for recovery from stuck states.
+
 ## Known Limitations / Technical Debt
 
 ### HID Key Report: No Multi-key Support
@@ -118,7 +153,7 @@ Current `send_key_up()` releases ALL keys (sends empty report), not a specific k
 - User holds button while rotating encoder
 - Future features require modifier keys (Shift+Enter, etc.)
 
-**Fix when needed**: Maintain a `pressed_keys[6]` state array, add/remove individual keycodes, and send updated report on each change. See conversation history for implementation sketch.
+**Fix when needed**: Maintain a `pressed_keys[6]` state array, add/remove individual keycodes, and send updated report on each change.
 
 ## Documentation Language
 

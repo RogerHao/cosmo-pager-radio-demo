@@ -1,0 +1,12 @@
+# This file was generated using idf.py save-defconfig. It can be edited manually.
+# Espressif IoT Development Framework (ESP-IDF) Project Minimal Configuration
+#
+
+# TinyUSB HID Configuration
+CONFIG_TINYUSB_HID_COUNT=1
+
+# Flash Configuration (XIAO ESP32S3 = 8MB)
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+
+# Partition Table
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
