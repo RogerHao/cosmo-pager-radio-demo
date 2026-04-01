@@ -26,14 +26,14 @@
 | Kailh BOX 轴 + 6.25U 卫星轴 | 机械键盘蝴蝶结构，3.6mm 行程 | Action Button |
 | RC522 mini NFC 模块 | 13.56MHz SPI，读 NTAG213 UID | NFC 刷卡交互 |
 | WS2812B LED × 1 | 5050 RGB | 状态指示 |
-| FPC 弯头 Type-C + 一分二线 | 平板引出 + 充电/HID 分流 | 连接平板 |
+| USB-C 大电流转接板 × 2 + SS34 | PCB 板载 VBUS 注入，替代 FPC+一分二 | 充电 + 数据单线直连 |
 
 ## 连接方案
 
-| 方案 | 固件目录 | 状态 |
+| 方案 | 固件位置 | 状态 |
 |------|----------|------|
-| USB HID | `tusb_hid/` | **当前使用** — TinyUSB，即插即用 |
-| BLE HID | `firmware/` | V1-V2 遗留，已停用 |
+| USB HID | 项目根目录 | **当前使用** — TinyUSB，即插即用 |
+| BLE HID | (已删除，见 git 历史) | V1-V2 遗留，已停用 |
 
 ## 交互设计
 
@@ -57,23 +57,19 @@
 ## 项目结构
 
 ```
-cosmo-radio/
-├── README.md
-├── CLAUDE.md
-├── TODO.md                             # V4 待办事项
+cosmo-radio/                            # 项目根 = ESP-IDF USB HID 固件
+├── main/
+│   ├── tusb_hid_example_main.c         # 入口，USB HID + 输入处理
+│   ├── input_handler.c/h               # GPIO 中断输入
+│   └── led_indicator.c/h               # WS2812 LED 控制
+├── sdkconfig.defaults
+├── CMakeLists.txt
 ├── docs/
-│   ├── project/ → codex 项目文档         # BOM、PCB Spec、项目主文档
-│   ├── design/
-│   │   └── hardware-architecture.md
-│   ├── E5Ultra/
-│   └── references/
-├── firmware/                           # BLE HID 固件（V1-V2 遗留）
-├── tusb_hid/                           # USB HID 固件（当前使用）
-│   ├── main/
-│   │   ├── tusb_hid_example_main.c
-│   │   ├── input_handler.c/h
-│   │   └── led_indicator.c/h
-│   └── sdkconfig.defaults
+│   ├── assets/                         # 元器件引脚图、参考图
+│   ├── firmware/                       # 固件实现文档
+│   ├── hardware/                       # 硬件模块设计方案
+│   ├── legacy/                         # 弃用内容
+│   └── project/ → codex               # BOM、PCB Spec、项目主文档
 └── test/
     └── hid-test.html
 ```
@@ -95,7 +91,7 @@ cosmo-radio/
 
 - [x] BOM 定稿 + 报价
 - [ ] PCB 载板设计 (KiCad → JLCPCB)
-- [ ] USB-C 板载集成评估（替代 FPC + 一分二）
+- [x] USB-C 板载集成评估 — 方案 B (VBUS 被动注入) 选定，待面包板验证
 - [ ] 按钮机构原型验证 (Kailh + 卫星轴)
 - [ ] NFC 驱动开发 (RC522 SPI)
 - [ ] 固件迁移 (SuperMini → DevKitC N16R8)
@@ -106,20 +102,10 @@ cosmo-radio/
 ## 构建与烧录
 
 ```bash
-# 激活 ESP-IDF 环境
-get_idf
-
-# USB HID 固件
-cd tusb_hid
-
-# 设置目标芯片（首次）
-idf.py set-target esp32s3
-
-# 构建
-idf.py build
-
-# 烧录并监控
-idf.py -p /dev/cu.usbmodem* flash monitor
+get_idf                                    # 激活 ESP-IDF 环境
+idf.py set-target esp32s3                  # 设置目标芯片（首次）
+idf.py build                               # 构建
+idf.py -p /dev/cu.usbmodem* flash monitor  # 烧录并监控
 ```
 
 ## GPIO 引脚分配（V4 — DevKitC N16R8）
@@ -141,4 +127,5 @@ idf.py -p /dev/cu.usbmodem* flash monitor
 - [V4 BOM 及报价分析](docs/project/CosmoRadio-V4-BOM及报价分析.md)
 - [V4 PCB 载板规格](docs/project/CosmoRadio-V4-PCB-Spec.md)
 - [项目主文档](docs/project/cosmoradio-yangweile-customized-hardware.md)
-- [硬件架构设计](docs/design/hardware-architecture.md)
+- [USB 接口方案](docs/hardware/usb.md)
+- [NFC 模块方案](docs/hardware/nfc.md)
