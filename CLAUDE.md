@@ -158,7 +158,7 @@ docs/
 ### 文件命名
 
 - 目录名：小写英文，连字符分隔 (`hardware/`, `legacy/`)
-- 文档：小写英文，连字符分隔 (`nfc-module.md`, `usb.md`)
+- 文档：小写英文，连字符分隔 (`nfc.md`, `usb.md`)
 - 图片：`<模块>-<描述>.png` (`usb-c-breakout-6p-pinout.png`)
 - 项目文档 (docs/project/)：中文标题允许，跟随 codex 命名
 
