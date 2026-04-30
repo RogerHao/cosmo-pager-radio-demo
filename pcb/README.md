@@ -185,6 +185,22 @@ flowchart LR
 | 热稳定 | 连续运行 2 小时无明显温升 |
 | 恢复能力 | 平板重启、熄屏、亮屏、重插后能恢复 |
 
+修正后的第一版验证拓扑必须包含 `SYS_5V` 电源 OR-ing：
+
+```mermaid
+flowchart LR
+    tabv[Tab A9 VBUS] --> dt[隔离二极管 / 理想二极管]
+    chg[外部 5V] --> dc[隔离二极管 / 理想二极管]
+    dt --> sys[SYS_5V]
+    dc --> sys
+    sys --> esp[ESP32 5V]
+    chg --> inj[肖特基 / 限流 / eFuse]
+    inj --> tabv
+    tab[Tab A9 D+/D-] <-- USB2 --> esp
+```
+
+原因：不插外部电源时，平板作为 USB Host 必须能从 `Tab_A9_VBUS` 给 ESP32 供电。若 ESP32 只接外部 `VBUS_IN`，则无法验证正常 OTG 使用场景。外部电源接入后，`VBUS_IN` 同时给 ESP32 供电，并通过隔离/限流路径尝试注入 `Tab_A9_VBUS` 给平板充电。
+
 ## 关键设计判断
 
 ### 采用混合焊接方案
