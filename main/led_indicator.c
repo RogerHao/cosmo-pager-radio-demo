@@ -9,8 +9,9 @@
 
 static const char *TAG = "LED";
 
-// WS2812 LED on GP7 (ESP32-S3 SuperMini)
-#define LED_GPIO    7
+// V4: onboard WS2812 RGB LED on ESP32-S3-DevKitC-1 (GPIO48).
+// No external LED in V4 — see CLAUDE.md GPIO Pin Assignments.
+#define LED_GPIO    48
 
 // Number of LEDs in strip (single LED)
 #define LED_COUNT   1

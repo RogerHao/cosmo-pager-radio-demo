@@ -42,37 +42,46 @@ idf.py fullclean                           # 清理构建
 ```
 cosmo-radio/                       # 项目根 = ESP-IDF 项目
 ├── main/
-│   ├── tusb_hid_example_main.c    # Entry point, USB HID + input handling
-│   ├── input_handler.c/h          # GPIO interrupt-based input
-│   └── led_indicator.c/h          # WS2812 LED control
+│   ├── tusb_hid_example_main.c    # Entry point, USB HID + ASCII→HID encoder
+│   ├── input_handler.c/h          # GPIO interrupt-based input (button + 2 EC11)
+│   ├── nfc_handler.c/h            # RC522 SPI scan + NDEF Text Record parser
+│   └── led_indicator.c/h          # Onboard WS2812 RGB control (GPIO48)
 ├── sdkconfig.defaults
 └── CMakeLists.txt
 ```
 
-## GPIO Pin Assignments (V4 — ESP32-S3 DevKitC N16R8)
+## GPIO Pin Assignments (V4 — ESP32-S3 DevKitC N16R8, finalized 2026-05-06)
 
-| Function | GPIO | Notes |
-|----------|------|-------|
-| EC11 Left A | 1 | Interrupt, 10K pull-up |
-| EC11 Left B | 2 | Interrupt, 10K pull-up |
-| EC11 Left SW | 3 | Press = GND |
-| EC11 Right A | 4 | Interrupt, 10K pull-up |
-| EC11 Right B | 5 | Interrupt, 10K pull-up |
-| EC11 Right SW | 6 | Press = GND |
-| Action Button | 7 | Kailh BOX switch, press = GND |
-| WS2812B DIN | 8 | Series 330R resistor |
-| RC522 NFC CS | 34 (FSPICS0) | Hardware SPI |
-| RC522 NFC MOSI | 35 (FSPID) | Hardware SPI |
-| RC522 NFC SCK | 36 (FSPICLK) | Hardware SPI |
-| RC522 NFC MISO | 37 (FSPIQ) | Hardware SPI |
-| RC522 NFC RST | 9 | Reset |
-| RC522 NFC IRQ | 10 | Interrupt, optional |
-| USB D- | 19 | Native USB OTG (fixed) |
-| USB D+ | 20 | Native USB OTG (fixed) |
-| Reserved | 11-18 | Expansion |
+> 万能板飞线优先，按"DevKitC 排针物理位置 ↔ 连接器物理位置"最近邻原则分配。
+> ⚠️ N16R8 = 8MB **octal** PSRAM — GPIO 26-37 全段被内部 octal SPI flash + PSRAM 占用，不可使用。
 
-All input GPIOs use pull-up resistors (external 10K on PCB for EC11, internal for button).
-NFC uses FSPI hardware SPI bus (GPIO34-37) for best performance.
+| Function | GPIO | Connector | Notes |
+|----------|------|-----------|-------|
+| Action Button | 1 | J3 (右上 2P) | Kailh BOX, press = GND, internal pull-up |
+| EC11 Left A | 17 | J1 (左中 5P) | internal pull-up |
+| EC11 Left B | 18 | J1 (左中 5P) | internal pull-up |
+| EC11 Left SW | 8 | J1 (左中 5P) | internal pull-up |
+| EC11 Right A | 42 | J2 (右中 5P) | internal pull-up |
+| EC11 Right B | 41 | J2 (右中 5P) | internal pull-up |
+| EC11 Right SW | 40 | J2 (右中 5P) | internal pull-up |
+| RC522 NFC RST | 4 | J4 (左上 8P) | low-active |
+| RC522 NFC IRQ | 5 | J4 (左上 8P) | low-active, 当前固件未使用，仅接线预留 |
+| RC522 NFC MISO | 6 | J4 (左上 8P) | SPI2 (FSPI) via GPIO Matrix |
+| RC522 NFC MOSI | 7 | J4 (左上 8P) | SPI2 (FSPI) via GPIO Matrix |
+| RC522 NFC SCK | 15 | J4 (左上 8P) | SPI2 (FSPI) via GPIO Matrix |
+| RC522 NFC CS (SDA) | 16 | J4 (左上 8P) | software-driven |
+| USB D- | 19 | OTG 子板 | Native USB OTG (fixed) |
+| USB D+ | 20 | OTG 子板 | Native USB OTG (fixed) |
+| Onboard RGB LED | 48 | DevKitC 板载 | WS2812B 板载，bring-up 调试用，不外接 LED |
+| Reserved (free) | 2, 9, 10, 11, 12, 13, 14, 38, 39, 47 | — | 扩展可用 |
+| ⚠️ Strapping | 0 (BOOT), 3, 45, 46 | — | 做输入需保证 boot 时电平不被强拉 |
+| ⚠️ UART0 | 43 (TX), 44 (RX) | — | 烧录/monitor 占用，不要做关键输入 |
+| 🔒 Octal PSRAM | 26-37 | — | 内部使用，不可分配 |
+
+### EC11 接线说明（V4）
+
+EC11 是纯机械开关，**不需要 VCC**，3 个 IO + GND 即可工作（C / SW2 都接 GND，A / B / SW1 接 GPIO，靠 ESP32 内部上拉拉高）。
+飞线阶段使用内部 ~45kΩ 上拉；PCB 版本会外加 10kΩ 上拉提高抗噪与边沿锐度。
 
 ### V3 GPIO (SuperMini — deprecated, see git history)
 
@@ -80,13 +89,27 @@ NFC uses FSPI hardware SPI bus (GPIO34-37) for best performance.
 
 | Input | HID Key | Description |
 |-------|---------|-------------|
-| Button press | Enter | Confirm action |
-| Button release | (key up) | |
+| Action Button press | Enter | Confirm action |
+| Action Button release | (key up) | |
 | Encoder 1 CW | Up arrow | Frequency up |
 | Encoder 1 CCW | Down arrow | Frequency down |
+| Encoder 1 SW press | F1 | (placeholder, 平板侧可重新映射) |
+| Encoder 1 SW release | (key up) | |
 | Encoder 2 CW | Right arrow | Mode next |
 | Encoder 2 CCW | Left arrow | Mode previous |
-| NFC tag scan | `NFC:<UID_HEX>\n` | HID 键盘逐字符键入，平板端解析 UID 映射动作 |
+| Encoder 2 SW press | F2 | (placeholder, 平板侧可重新映射) |
+| Encoder 2 SW release | (key up) | |
+| NFC tag scan (NDEF Text 写入) | `#<payload>\n` | **主路径**：固件读 NDEF Text Record，把 payload 加 `#` 前缀 + Enter 键入 |
+| NFC tag scan (无 NDEF / 兜底) | `NFC:<UID_HEX>\n` | 兜底：空白卡 / 非 NTAG / 解析失败时类型 UID，方便诊断 |
+
+### NFC Tag 内容编码契约
+
+- **写入介质**：NTAG21x 用户内存（page 4+），NDEF Text Record，UTF-8
+- **payload 字符集**：`[A-Za-z0-9 # : / . - _]`（其他字符 HID 表无法转码会被静默跳过）
+- **payload 长度上限**：32 字节（超长截断）
+- **重复触发抑制**：同 UID 1.5s 内静默丢弃（应对 RC522 心跳抖动）
+- **生产流程**：用任一手机 NFC writer app（NFC Tools 等）写卡，固件零工具依赖
+- **平板侧解析**：以 `\n` 分行，`#` 开头是 NFC payload，`NFC:` 开头是 UID 兜底，其它键是输入设备事件
 
 ## Hardware Target (V4)
 
@@ -94,14 +117,15 @@ NFC uses FSPI hardware SPI bus (GPIO34-37) for best performance.
 |-------|-------|-------|
 | ESP32-S3 DevKitC N16R8 | 16MB | 8MB |
 
-- **Power**: 外部充电器 → J6 VBUS → PCB → J5 VBUS → 平板（方案 B 被动注入）
+- **Power**: 外部充电器 → 一分二 OTG + 充电线材内置子板 → 平板（被动 SS34 注入方案已实测失败，弃用）
 - **PCB**: Custom carrier board, 80×50mm, XH2.54 connectors
-- **Connectors**: J1/J2 (EC11 5P), J3 (Top module 3P/4P), J4 (NFC 8P), J5 (USB-C 平板输出), J6 (USB-C 充电输入)
+- **Connectors**: J1 (EC11 左 5P, 左中), J2 (EC11 右 5P, 右中), J3 (Action Button 2P, 右上), J4 (NFC RC522 8P, 左上). USB / 充电由 OTG 一分二子板承担，无独立 J5/J6
+- **No external LED**: 取消外接 WS2812B，使用 DevKitC 板载 GPIO48 RGB LED 做调试指示
 - **Screws**: M2.5×10 平头内六角 (flat head hex socket)
 - **Speaker**: 使用平板自带音响，不外接
 - **Top button**: 键盘轴 + 6.25U 卫星轴空格键 (~10cm)
 - **Encoder press**: EC11 SW 引脚已接线，功能可选不用
-- **NFC count**: ⚠️ 待确认 1 vs 2 个 RC522 模块（影响 GPIO/PCB）
+- **NFC count**: 1 个 RC522 mini 模块（2026-05-06 确认，最终方案）
 - **Cost**: 单套 ¥79（不含线材），主控板 ~¥32 (40%)
 
 ## PCB Design
@@ -133,13 +157,17 @@ Current `send_key_up()` releases ALL keys (sends empty report). Fine for single-
 
 **Fix when needed**: Maintain `pressed_keys[6]` state array, add/remove individual keycodes per event.
 
-### V4 Migration Pending
+### sdkconfig 仍是 V3 4MB 配置（未启用 octal PSRAM）
 
-Firmware still targets SuperMini GPIO mapping. V4 migration tasks:
-- Remap all GPIOs to DevKitC N16R8 pin assignments
-- Add RC522 NFC SPI driver (FSPI bus)
-- Add Kailh button handler (GPIO7)
-- Update `sdkconfig.defaults` for N16R8 flash/PSRAM config
+`sdkconfig.defaults` 当前是 V3 SuperMini 的 4MB flash + 无 PSRAM。固件本身不分配 PSRAM 所以工作正常，但 16MB flash 只用前 4MB。烧录时会有一条良性警告：
+```
+W spi_flash: Detected size(16384k) larger than the size in the binary image header(4096k). Using the size in the binary image header.
+```
+PCB 量产前需要单独提交一个 commit，把 `sdkconfig.defaults` 升到 16MB + octal PSRAM。
+
+### NFC SPI 时钟暂用 1MHz
+
+飞线版本 RF 发射时电源/地噪声会让默认 5MHz SPI 在 SELECT 命令上偶发 RX timeout。目前在 `main/nfc_handler.c` 显式设置 `clock_speed_hz = 1000000` 规避。**PCB 版本可以尝试拉回 5MHz**，铜箔走线 + 适当去耦电容后应该能稳定。
 
 ## Documentation Structure
 

@@ -16,18 +16,23 @@
 
 static const char *TAG = "INPUT";
 
-// GPIO pin definitions (ESP32-S3 SuperMini)
-#define GPIO_BUTTON_A   1   // GP1 - Button (redundant pair)
-#define GPIO_BUTTON_B   2   // GP2 - Button (redundant pair)
-#define GPIO_ENC1_CLK   4   // GP4
-#define GPIO_ENC1_DT    3   // GP3
-#define GPIO_ENC2_CLK   5   // GP5
-#define GPIO_ENC2_DT    6   // GP6
+// GPIO pin definitions (V4 — ESP32-S3 DevKitC N16R8, finalized 2026-05-06)
+// See CLAUDE.md "GPIO Pin Assignments" for connector map and rationale.
+#define GPIO_BUTTON     1   // J3 (右上 2P) - Kailh BOX action button
+#define GPIO_ENC1_A     17  // J1 (左中 5P) - EC11 Left A
+#define GPIO_ENC1_B     18  // J1 (左中 5P) - EC11 Left B
+#define GPIO_ENC1_SW    8   // J1 (左中 5P) - EC11 Left push switch
+#define GPIO_ENC2_A     42  // J2 (右中 5P) - EC11 Right A
+#define GPIO_ENC2_B     41  // J2 (右中 5P) - EC11 Right B
+#define GPIO_ENC2_SW    40  // J2 (右中 5P) - EC11 Right push switch
 
 // All input GPIOs as a mask
-#define GPIO_INPUT_MASK ((1ULL << GPIO_BUTTON_A) | (1ULL << GPIO_BUTTON_B) | \
-                         (1ULL << GPIO_ENC1_CLK) | (1ULL << GPIO_ENC1_DT) | \
-                         (1ULL << GPIO_ENC2_CLK) | (1ULL << GPIO_ENC2_DT))
+#define GPIO_INPUT_MASK ((1ULL << GPIO_BUTTON) | \
+                         (1ULL << GPIO_ENC1_A) | (1ULL << GPIO_ENC1_B) | (1ULL << GPIO_ENC1_SW) | \
+                         (1ULL << GPIO_ENC2_A) | (1ULL << GPIO_ENC2_B) | (1ULL << GPIO_ENC2_SW))
+
+// Largest GPIO number used (for debounce table sizing)
+#define GPIO_MAX_USED   43
 
 // Event queue size (should handle burst of encoder events)
 #define EVENT_QUEUE_SIZE 32
@@ -55,13 +60,16 @@ static volatile bool s_running = false;
 // Encoder state tracking (for detent detection)
 static uint8_t s_enc1_state = 0;
 static uint8_t s_enc2_state = 0;
-static int s_btn_last = 1;  // Pull-up, 1 = released
+static int s_btn_last = 1;          // Pull-up, 1 = released
+static int s_enc1_sw_last = 1;
+static int s_enc2_sw_last = 1;
 
 // Button press timestamp for force restart detection
 static int64_t s_btn_press_time = 0;
 
-// Last ISR time for each GPIO (for software debounce, indexed by gpio_num)
-static int64_t s_last_isr_time[8] = {0};
+// Last ISR time for each GPIO (for software debounce, indexed by gpio_num).
+// Sized to cover the largest GPIO number we attach an ISR to.
+static int64_t s_last_isr_time[GPIO_MAX_USED + 1] = {0};
 
 // ISR handler - minimal work, just queue the event
 // Note: Keep this as simple as possible to avoid watchdog issues
@@ -120,10 +128,11 @@ static void input_handler_task(void *arg)
     ESP_LOGI(TAG, "Input task started");
 
     // Initialize encoder states
-    s_enc1_state = (gpio_get_level(GPIO_ENC1_CLK) << 1) | gpio_get_level(GPIO_ENC1_DT);
-    s_enc2_state = (gpio_get_level(GPIO_ENC2_CLK) << 1) | gpio_get_level(GPIO_ENC2_DT);
-    // Redundant button: pressed if either pin is low
-    s_btn_last = gpio_get_level(GPIO_BUTTON_A) & gpio_get_level(GPIO_BUTTON_B);
+    s_enc1_state = (gpio_get_level(GPIO_ENC1_A) << 1) | gpio_get_level(GPIO_ENC1_B);
+    s_enc2_state = (gpio_get_level(GPIO_ENC2_A) << 1) | gpio_get_level(GPIO_ENC2_B);
+    s_btn_last = gpio_get_level(GPIO_BUTTON);
+    s_enc1_sw_last = gpio_get_level(GPIO_ENC1_SW);
+    s_enc2_sw_last = gpio_get_level(GPIO_ENC2_SW);
 
     s_running = true;
     s_last_activity_time = esp_timer_get_time();
@@ -146,43 +155,60 @@ static void input_handler_task(void *arg)
             s_last_activity_time = now;
 
             // Process based on which GPIO triggered
-            if (evt.gpio_num == GPIO_BUTTON_A || evt.gpio_num == GPIO_BUTTON_B) {
-                // Redundant button: read both pins, pressed if either is low
-                int btn_level = gpio_get_level(GPIO_BUTTON_A) & gpio_get_level(GPIO_BUTTON_B);
+            if (evt.gpio_num == GPIO_BUTTON) {
+                int btn_level = gpio_get_level(GPIO_BUTTON);
                 if (btn_level == 0 && s_btn_last == 1) {
-                    // Button pressed - record timestamp
                     s_btn_press_time = esp_timer_get_time();
                     input_evt.type = INPUT_EVENT_BUTTON_PRESS;
-                    ESP_LOGD(TAG, "Button pressed (GPIO%d)", evt.gpio_num);
+                    ESP_LOGD(TAG, "Button pressed");
                 } else if (btn_level == 1 && s_btn_last == 0) {
-                    // Button released - clear timestamp
                     s_btn_press_time = 0;
                     input_evt.type = INPUT_EVENT_BUTTON_RELEASE;
-                    ESP_LOGD(TAG, "Button released (GPIO%d)", evt.gpio_num);
+                    ESP_LOGD(TAG, "Button released");
                 }
                 s_btn_last = btn_level;
             }
-            else if (evt.gpio_num == GPIO_ENC1_CLK || evt.gpio_num == GPIO_ENC1_DT) {
-                // Read both pins for encoder 1
-                uint8_t clk = gpio_get_level(GPIO_ENC1_CLK);
-                uint8_t dt = gpio_get_level(GPIO_ENC1_DT);
-                input_evt.type = process_encoder(clk, dt, &s_enc1_state, true);
+            else if (evt.gpio_num == GPIO_ENC1_A || evt.gpio_num == GPIO_ENC1_B) {
+                uint8_t a = gpio_get_level(GPIO_ENC1_A);
+                uint8_t b = gpio_get_level(GPIO_ENC1_B);
+                input_evt.type = process_encoder(a, b, &s_enc1_state, true);
                 if (input_evt.type == INPUT_EVENT_ENC1_CW) {
                     ESP_LOGD(TAG, "ENC1 CW");
                 } else if (input_evt.type == INPUT_EVENT_ENC1_CCW) {
                     ESP_LOGD(TAG, "ENC1 CCW");
                 }
             }
-            else if (evt.gpio_num == GPIO_ENC2_CLK || evt.gpio_num == GPIO_ENC2_DT) {
-                // Read both pins for encoder 2
-                uint8_t clk = gpio_get_level(GPIO_ENC2_CLK);
-                uint8_t dt = gpio_get_level(GPIO_ENC2_DT);
-                input_evt.type = process_encoder(clk, dt, &s_enc2_state, false);
+            else if (evt.gpio_num == GPIO_ENC1_SW) {
+                int sw_level = gpio_get_level(GPIO_ENC1_SW);
+                if (sw_level == 0 && s_enc1_sw_last == 1) {
+                    input_evt.type = INPUT_EVENT_ENC1_SW_PRESS;
+                    ESP_LOGD(TAG, "ENC1 SW pressed");
+                } else if (sw_level == 1 && s_enc1_sw_last == 0) {
+                    input_evt.type = INPUT_EVENT_ENC1_SW_RELEASE;
+                    ESP_LOGD(TAG, "ENC1 SW released");
+                }
+                s_enc1_sw_last = sw_level;
+            }
+            else if (evt.gpio_num == GPIO_ENC2_A || evt.gpio_num == GPIO_ENC2_B) {
+                uint8_t a = gpio_get_level(GPIO_ENC2_A);
+                uint8_t b = gpio_get_level(GPIO_ENC2_B);
+                input_evt.type = process_encoder(a, b, &s_enc2_state, false);
                 if (input_evt.type == INPUT_EVENT_ENC2_CW) {
                     ESP_LOGD(TAG, "ENC2 CW");
                 } else if (input_evt.type == INPUT_EVENT_ENC2_CCW) {
                     ESP_LOGD(TAG, "ENC2 CCW");
                 }
+            }
+            else if (evt.gpio_num == GPIO_ENC2_SW) {
+                int sw_level = gpio_get_level(GPIO_ENC2_SW);
+                if (sw_level == 0 && s_enc2_sw_last == 1) {
+                    input_evt.type = INPUT_EVENT_ENC2_SW_PRESS;
+                    ESP_LOGD(TAG, "ENC2 SW pressed");
+                } else if (sw_level == 1 && s_enc2_sw_last == 0) {
+                    input_evt.type = INPUT_EVENT_ENC2_SW_RELEASE;
+                    ESP_LOGD(TAG, "ENC2 SW released");
+                }
+                s_enc2_sw_last = sw_level;
             }
 
             // Dispatch event if valid
@@ -241,24 +267,29 @@ esp_err_t input_handler_init(void)
     }
 
     // Add ISR handlers for each GPIO (interrupts still disabled)
-    gpio_isr_handler_add(GPIO_BUTTON_A, gpio_isr_handler, (void*)GPIO_BUTTON_A);
-    gpio_isr_handler_add(GPIO_BUTTON_B, gpio_isr_handler, (void*)GPIO_BUTTON_B);
-    gpio_isr_handler_add(GPIO_ENC1_CLK, gpio_isr_handler, (void*)GPIO_ENC1_CLK);
-    gpio_isr_handler_add(GPIO_ENC1_DT, gpio_isr_handler, (void*)GPIO_ENC1_DT);
-    gpio_isr_handler_add(GPIO_ENC2_CLK, gpio_isr_handler, (void*)GPIO_ENC2_CLK);
-    gpio_isr_handler_add(GPIO_ENC2_DT, gpio_isr_handler, (void*)GPIO_ENC2_DT);
+    gpio_isr_handler_add(GPIO_BUTTON,  gpio_isr_handler, (void*)GPIO_BUTTON);
+    gpio_isr_handler_add(GPIO_ENC1_A,  gpio_isr_handler, (void*)GPIO_ENC1_A);
+    gpio_isr_handler_add(GPIO_ENC1_B,  gpio_isr_handler, (void*)GPIO_ENC1_B);
+    gpio_isr_handler_add(GPIO_ENC1_SW, gpio_isr_handler, (void*)GPIO_ENC1_SW);
+    gpio_isr_handler_add(GPIO_ENC2_A,  gpio_isr_handler, (void*)GPIO_ENC2_A);
+    gpio_isr_handler_add(GPIO_ENC2_B,  gpio_isr_handler, (void*)GPIO_ENC2_B);
+    gpio_isr_handler_add(GPIO_ENC2_SW, gpio_isr_handler, (void*)GPIO_ENC2_SW);
 
     // Now enable interrupts on each GPIO
-    gpio_set_intr_type(GPIO_BUTTON_A, GPIO_INTR_ANYEDGE);
-    gpio_set_intr_type(GPIO_BUTTON_B, GPIO_INTR_ANYEDGE);
-    gpio_set_intr_type(GPIO_ENC1_CLK, GPIO_INTR_ANYEDGE);
-    gpio_set_intr_type(GPIO_ENC1_DT, GPIO_INTR_ANYEDGE);
-    gpio_set_intr_type(GPIO_ENC2_CLK, GPIO_INTR_ANYEDGE);
-    gpio_set_intr_type(GPIO_ENC2_DT, GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(GPIO_BUTTON,  GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(GPIO_ENC1_A,  GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(GPIO_ENC1_B,  GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(GPIO_ENC1_SW, GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(GPIO_ENC2_A,  GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(GPIO_ENC2_B,  GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(GPIO_ENC2_SW, GPIO_INTR_ANYEDGE);
 
-    ESP_LOGI(TAG, "Input handler initialized (GPIO interrupts)");
-    ESP_LOGI(TAG, "  Button: GPIO%d+%d (redundant), ENC1: GPIO%d/%d, ENC2: GPIO%d/%d",
-             GPIO_BUTTON_A, GPIO_BUTTON_B, GPIO_ENC1_CLK, GPIO_ENC1_DT, GPIO_ENC2_CLK, GPIO_ENC2_DT);
+    ESP_LOGI(TAG, "Input handler initialized (V4 — DevKitC N16R8)");
+    ESP_LOGI(TAG, "  Button: GPIO%d", GPIO_BUTTON);
+    ESP_LOGI(TAG, "  ENC1 (left):  A=GPIO%d B=GPIO%d SW=GPIO%d",
+             GPIO_ENC1_A, GPIO_ENC1_B, GPIO_ENC1_SW);
+    ESP_LOGI(TAG, "  ENC2 (right): A=GPIO%d B=GPIO%d SW=GPIO%d",
+             GPIO_ENC2_A, GPIO_ENC2_B, GPIO_ENC2_SW);
 
     return ESP_OK;
 }

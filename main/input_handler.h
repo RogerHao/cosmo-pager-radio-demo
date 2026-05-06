@@ -18,12 +18,16 @@ extern "C" {
 // Input event types
 typedef enum {
     INPUT_EVENT_NONE = 0,
-    INPUT_EVENT_BUTTON_PRESS,
+    INPUT_EVENT_BUTTON_PRESS,        // Action button (Kailh BOX) pressed
     INPUT_EVENT_BUTTON_RELEASE,
-    INPUT_EVENT_ENC1_CW,        // Encoder 1 clockwise
-    INPUT_EVENT_ENC1_CCW,       // Encoder 1 counter-clockwise
-    INPUT_EVENT_ENC2_CW,        // Encoder 2 clockwise
-    INPUT_EVENT_ENC2_CCW,       // Encoder 2 counter-clockwise
+    INPUT_EVENT_ENC1_CW,             // Encoder 1 (left) clockwise
+    INPUT_EVENT_ENC1_CCW,            // Encoder 1 (left) counter-clockwise
+    INPUT_EVENT_ENC1_SW_PRESS,       // Encoder 1 (left) push switch pressed
+    INPUT_EVENT_ENC1_SW_RELEASE,
+    INPUT_EVENT_ENC2_CW,             // Encoder 2 (right) clockwise
+    INPUT_EVENT_ENC2_CCW,            // Encoder 2 (right) counter-clockwise
+    INPUT_EVENT_ENC2_SW_PRESS,       // Encoder 2 (right) push switch pressed
+    INPUT_EVENT_ENC2_SW_RELEASE,
 } input_event_type_t;
 
 // Input event structure

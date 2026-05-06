@@ -3,7 +3,7 @@
 > 用户将带有 NFC/RFID 标签的实物放置在收音机上方，触发安卓平板上的对应行为。
 > ESP32 作为 USB HID 键盘，通过"键入字符串"方式将 NFC 事件传递给平板。
 
-> **⚠️ 开放问题（2026-04-01 会议）**：NFC 模块数量待确认。杨炜乐希望预留 2 个 NFC 位置（外壳两侧各一个），Arthur 认为 1 个足够。1 个 RC522 = 8 根线（8P 连接器），2 个将占用 16 根线和额外 GPIO。待 Arthur 与杨炜乐讨论后确认。当前文档按 1 个 NFC 模块编写，若确认 2 个需更新 GPIO 分配和 PCB 设计。
+> ✅ **NFC 数量已确认（2026-05-06）**：1 个 RC522 mini，最终方案，不再讨论。下文"双 NFC 方案备选"段保留作为备忘，不再实施。
 
 ---
 
@@ -47,18 +47,23 @@
 
 | Pin | 模块丝印 | 信号 | ESP32-S3 GPIO | SPI 总线 | 说明 |
 |-----|---------|------|--------------|----------|------|
-| 1 | SDA | CS (片选) | GPIO34 | FSPICS0 | 软件控制，低有效 |
-| 2 | SCK | SPI 时钟 | GPIO36 | FSPICLK | |
-| 3 | MOSI | 主→从数据 | GPIO35 | FSPID | |
-| 4 | MISO | 从→主数据 | GPIO37 | FSPIQ | |
-| 5 | IRQ | 中断请求 | GPIO10 | — | 低有效，可选 |
+| 1 | SDA | CS (片选) | GPIO16 | SPI2 (软件 CS) | 软件控制，低有效 |
+| 2 | SCK | SPI 时钟 | GPIO15 | SPI2 CLK | |
+| 3 | MOSI | 主→从数据 | GPIO7 | SPI2 MOSI | |
+| 4 | MISO | 从→主数据 | GPIO6 | SPI2 MISO | |
+| 5 | IRQ | 中断请求 | GPIO5 | — | 低有效，固件未使用，仅接线预留 |
 | 6 | GND | 地 | GND | — | |
-| 7 | RST | 复位 | GPIO9 | — | 低有效 |
+| 7 | RST | 复位 | GPIO4 | — | 低有效 |
 | 8 | 3V3 | VCC | 3V3 | — | 模块供电 |
 
-使用 FSPI 硬件 SPI 总线 (SPI2_HOST)，信号走 IO MUX 而非 GPIO Matrix，信号完整性最优。
+使用 SPI2 (FSPI) 硬件 SPI 总线，信号走 GPIO Matrix。RC522 工作频率 ~8 MHz，远低于 GPIO Matrix 上限（80 MHz），信号完整性无压力。
 
-> **IRQ 引脚说明**：MFRC522 检测到标签进入射频场时拉低 IRQ。当前 `abobija/rc522` 库采用 SPI 轮询模式，不依赖 IRQ，但保留接线方便未来切换中断驱动模式以降低 CPU 占用。GPIO10 取自 Reserved 10-18 范围。
+> **GPIO 分配演进**：
+> - 最初：GPIO 34-37（FSPI IO MUX 直连）→ ❌ 撞到 N16R8 内部 octal PSRAM
+> - 中间：GPIO 4/5/6/7（SCK/MISO/MOSI/CS）+ 15/16（RST/IRQ）→ 信号端连续，但飞线时 8P 排线需在板上转圈
+> - **当前（2026-05-06 实焊定稿）**：把整段顺序"翻过来"——RST→4 / IRQ→5 / MISO→6 / MOSI→7 / SCK→15 / CS→16，让 J4 连接器引脚和 DevKitC 排针走向一致，飞线无交叉
+>
+> **IRQ 引脚说明**：MFRC522 检测到标签进入射频场时拉低 IRQ。当前 `abobija/rc522` 库采用 SPI 轮询模式，不依赖 IRQ，但保留接线方便未来切换中断驱动模式以降低 CPU 占用。
 >
 > **注意**：模块丝印 RET 实际为 RST（复位），系厂商丝印错误。
 
@@ -101,27 +106,56 @@ ESP32 始终作为 USB HID 键盘。NFC 事件通过**键入结构化字符串**
 - 标准 HID 键盘协议，无需自定义驱动
 - 调试方便 — 任何文本编辑器都能看到输出
 
-### 2.2 NFC HID 报文格式
+### 2.2 NFC HID 报文格式（**2026-05-07 定稿**）
 
-当检测到标签时，ESP32 通过 HID 键盘逐字符键入以下字符串：
+> **协议演进**：早期方案是单一的 `NFC:<UID>\n`，但 UID 不可控（厂家烧录、每张卡随机），意味着每张卡都需要"逐张录入服务端数据库"才能上线。**当前方案改为读取卡上 NDEF Text Record 内容作为产品 ID**，UID 退化为兜底诊断信号。
 
-```
-NFC:<UID_HEX>\n
-```
+固件按以下两条路径之一键入：
+
+| 卡片状态 | HID 输出 | 说明 |
+|---------|---------|------|
+| 卡上写有 NDEF Text Record | `#<payload>\n` | **主路径** — payload 由生产时写入（如 `R01`、`track-42`） |
+| 空白卡 / 非 NDEF / 解析失败 | `NFC:<UID_HEX>\n` | 兜底 — 方便诊断"这张卡是不是没写过内容" |
 
 示例：
 ```
-NFC:04A1B2C3D4E5F6\n        ← NTAG215, 7-byte UID
+#R01\n                     ← 用户写入了 "R01"，平板查映射表决定播什么
+#track-42\n                ← 用户写入了 "track-42"
+#112358\n                  ← 用户写入了 "112358"（实测）
+NFC:04734D67220289\n       ← 同一张卡如果擦除了 NDEF，回退为 UID
 ```
 
-格式规范：
-| 字段 | 内容 | 说明 |
-|------|------|------|
-| 前缀 | `NFC:` | 固定 4 字符，平板端用于识别 NFC 事件 |
-| UID | 大写 HEX | 7-byte UID = 14 个十六进制字符 |
-| 终止符 | `\n` (Enter) | HID_KEY_ENTER，触发平板端处理 |
+平板侧解析（伪代码）：
 
-总字符数：4 (前缀) + 14 (UID) + 1 (Enter) = **19 次按键**。
+```kotlin
+when (line.firstOrNull()) {
+    '#'  -> handleNfcPayload(line.drop(1))  // "R01" → 查映射 → 执行
+    'N'  -> handleNfcUid(line.removePrefix("NFC:"))  // 兜底，提示用户卡未配置
+    else -> /* keyboard event from buttons/encoders */
+}
+```
+
+### 2.2.1 Payload 编码契约
+
+| 项目 | 约束 |
+|------|------|
+| 字符集 | `[A-Za-z0-9 # : / . - _]`（HID 表能直接键入的） |
+| 长度上限 | 32 字节（超长截断；建议 ≤ 12 字节减少键入延迟） |
+| 编码 | UTF-8 NDEF Text Record（status 字节 lang_len 任意） |
+| 写入工具 | 任一手机 NFC writer app（NFC Tools 等） |
+| 不支持 | 中文 / 空格 / UTF-16 / URI 类型 / 多记录 NDEF |
+
+### 2.2.2 同卡去重
+
+固件维护"上次触发的 UID + 时间戳"。同 UID 在 1500ms 内重复出现视为 RC522 心跳抖动（卡片未真正离开），静默丢弃。这意味着用户**必须把卡拿开 ≥1.5s 再放回**才能触发第二次。
+
+### 2.2.3 历史方案（仅 UID）— 已废弃
+
+```
+NFC:<UID_HEX>\n   ← 14 字符 UID，留作兜底
+```
+
+废弃原因：UID 厂家随机烧录，新卡上线必须逐张录入服务端，损坏一张卡需改服务端配置。NDEF Text 方案让产品身份与卡片物理身份解耦。
 
 ### 2.3 键入速率
 
@@ -187,7 +221,7 @@ rc522_spi_config_t driver_config = {
 };
 ```
 
-ESP32-S3 FSPI 引脚走 IO MUX，不存在 GPIO Matrix 半双工限制问题。
+ESP32-S3 SPI2 (FSPI) 通过 GPIO Matrix 灵活映射，不存在半双工限制问题。RC522 工作频率 ~8 MHz，GPIO Matrix 完全够用。
 
 ### 3.3 模块架构
 

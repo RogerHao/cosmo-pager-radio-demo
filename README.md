@@ -39,21 +39,33 @@
 
 ## 交互设计
 
-输入设备通过 ESP32 HID 协议（蓝牙或 USB）连接到安卓系统，模拟键盘按键：
+输入设备通过 ESP32 USB HID 协议作为标准键盘连接到安卓平板，事件以模拟按键传递：
 
 | 输入 | 映射 | 功能 |
 |------|------|------|
-| 顶部按钮 | Enter 键 | 确认选择 |
-| EC11 #1 旋转 | 上/下方向键 | 调节频率 |
-| EC11 #2 旋转 | 左/右方向键 | 切换模式 |
+| 顶部 Action 按钮 | Enter 键 | 确认选择 |
+| EC11 左 旋转 | 上/下方向键 | 调节频率 |
+| EC11 左 按下 | F1（占位，平板可重映射） | 扩展功能位 |
+| EC11 右 旋转 | 左/右方向键 | 切换模式 |
+| EC11 右 按下 | F2（占位，平板可重映射） | 扩展功能位 |
+| NFC 卡（写了 NDEF Text） | `#<payload>\n` | **主路径**：固件读卡上写入的字符串，加 `#` 前缀键入 |
+| NFC 卡（空白 / 非 NDEF） | `NFC:<UID>\n` | 兜底：识别失败时键入 UID 方便诊断 |
 
-### LED 状态指示
+### NFC 协议设计
+
+为了让产品身份与 NFC 卡 UID 解耦（UID 不可控且需要逐张录入），固件读取卡上的 NDEF Text Record 内容作为产品 ID。流程：
+
+1. 出厂前用任一手机 NFC 工具 app 把每张卡写入特定字符串（如 `R01`、`track-42`）
+2. 用户放卡 → 固件读 NDEF → HID 键入 `#R01\n`
+3. 平板侧 Android 应用监听 `#` 开头的行作为 NFC 事件，自带映射表决定动作
+
+### LED 状态指示（DevKitC 板载 GPIO48 RGB LED）
 
 | 事件 | LED 颜色 |
 |------|----------|
 | 按钮按下 | 红色 |
 | 按钮释放 | 熄灭 |
-| 连接成功 | 蓝色闪烁 |
+| NFC 识别中（键入期间） | 蓝色 |
 | 启动完成 | 绿色闪烁 |
 
 ## 项目结构
@@ -61,17 +73,19 @@
 ```
 cosmo-radio/                            # 项目根 = ESP-IDF USB HID 固件
 ├── main/
-│   ├── tusb_hid_example_main.c         # 入口，USB HID + 输入处理
-│   ├── input_handler.c/h               # GPIO 中断输入
-│   └── led_indicator.c/h               # WS2812 LED 控制
+│   ├── tusb_hid_example_main.c         # 入口：USB HID + ASCII→HID 编码
+│   ├── input_handler.c/h               # GPIO 中断输入（按钮 + 双 EC11）
+│   ├── nfc_handler.c/h                 # RC522 SPI 扫描 + NDEF Text 解析
+│   └── led_indicator.c/h               # 板载 WS2812 RGB（GPIO48）
 ├── sdkconfig.defaults
 ├── CMakeLists.txt
+├── pcb/                                # KiCad 工程 + JLCPCB 上板资料（待开始）
 ├── docs/
-│   ├── assets/                         # 元器件引脚图、参考图
+│   ├── assets/                         # 元器件引脚图、原型照片
 │   ├── firmware/                       # 固件实现文档
-│   ├── hardware/                       # 硬件模块设计方案
+│   ├── hardware/                       # 硬件模块设计方案（NFC、USB...）
 │   ├── legacy/                         # 弃用内容
-│   └── project/ → codex               # BOM、PCB Spec、项目主文档
+│   └── project/ → codex                # BOM、PCB Spec、项目主文档
 └── test/
     └── hid-test.html
 ```
@@ -91,20 +105,26 @@ cosmo-radio/                            # 项目根 = ESP-IDF USB HID 固件
 
 ## V4 进度
 
-- [x] 原 12 套 BOM 定稿 + 报价（单套 ¥79，12 套总计约 ¥13,000，已取消）
-- [x] 第一次需求会议（2026-04-01，与 Arthur/纪晟）
-- [x] 2026-04-02 原 4+8 交付合同取消
-- [x] 2026-04-29 与 Arthur 重启 V4：技术方案验证 + 单套原型，合同价 ¥5,000，目标 05-20 左右
-- [ ] PCB 载板设计 (KiCad → JLCPCB)
-- [x] USB-C 板载集成评估 — 方案 B (VBUS 被动注入) 选定，待面包板验证
-- [ ] 按钮机构原型验证 (6.25U 卫星轴空格键，物料预计 04-02/03 到)
-- [ ] NFC 数量确认 (1 vs 2，待杨炜乐讨论)
-- [ ] NFC 驱动开发 (RC522 SPI)
-- [ ] 旋钮 + NFC 协议规范文档
-- [ ] 固件迁移 (SuperMini → DevKitC N16R8)
-- [ ] 外壳适配 (Arthur Fusion 360，概念图已出)
-- [ ] 单套原型制作 + 整机测试
-- [ ] 交付技术验证结果和单套原型
+**2026-05-07 整体技术方案验证完成 ✅**——电气、固件、NFC 协议端到端跑通。后续是 PCB 板设计 + 结构件设计。
+
+电气与固件：
+- [x] 原 12 套 BOM 定稿 + 报价（单套 ¥79，已取消）
+- [x] 2026-04-29 与 Arthur 重启 V4：技术方案验证 + 单套原型，合同价 ¥5,000
+- [x] USB-C 充电方案：被动 SS34 注入实测失败 → 改为内置一分二 OTG 线材小板（已采购验证）
+- [x] NFC 数量确认：1 个 RC522 mini（2026-05-06）
+- [x] 万能板飞线原型焊接 + GPIO 验证（2026-05-06，[图片](docs/assets/v4-handmade-prototype-2026-05-06.jpg)）
+- [x] 固件 V4 GPIO 迁移（SuperMini → DevKitC N16R8）
+- [x] NFC 驱动开发（RC522 SPI + NDEF Text Record 解析）
+- [x] 旋钮 + NFC HID 协议定稿（`#<payload>\n` + UID 兜底）
+- [x] 端到端验证：iPhone 写卡 → ESP32 读 NDEF → HID 键入 `#112358\n`（2026-05-07）
+
+待办（V4 收尾）：
+- [ ] PCB 载板设计（KiCad → JLCPCB），把万能板飞线版固化为正式板
+- [ ] Arthur 寄新 Tab A9（原 Pad 已损坏）→ HID + 充电链路回归
+- [ ] 按钮机构验证（6.25U 卫星轴空格键 + 3D 打印键帽）
+- [ ] 外壳 3D 模型适配（Arthur Fusion 360）+ 打印装配
+- [ ] 单套整机原型组装 + 整机测试
+- [ ] 交付技术验证报告 + 单套原型
 
 ## 构建与烧录
 
@@ -115,16 +135,18 @@ idf.py build                               # 构建
 idf.py -p /dev/cu.usbmodem* flash monitor  # 烧录并监控
 ```
 
-## GPIO 引脚分配（V4 — DevKitC N16R8）
+## GPIO 引脚分配（V4 终版，2026-05-06 定稿）
 
-| 功能组 | GPIO | 备注 |
-|--------|------|------|
-| EC11 左旋钮 A/B/SW | 1, 2, 3 | 中断，10K 上拉 |
-| EC11 右旋钮 A/B/SW | 4, 5, 6 | 中断，10K 上拉 |
-| Action Button | 7 | Kailh 轴，按下接地 |
-| WS2812B LED DIN | 8 | 串联 330R |
-| RC522 NFC (FSPI) | 34-37 (CS/MOSI/SCK/MISO), 9 (RST) | 硬件 SPI |
-| USB OTG | 19 (D-), 20 (D+) | 固定引脚 |
+> N16R8 = 8MB octal PSRAM，**GPIO 26-37 全段被内部 octal SPI flash + PSRAM 占用，不可使用**。详情和连接器/排针对应表见 [CLAUDE.md](CLAUDE.md)。
+
+| 功能 | GPIO | 连接器 |
+|------|------|--------|
+| Action Button | 1 | J3 (右上 2P) |
+| EC11 左 A/B/SW | 17, 18, 8 | J1 (左中 5P) |
+| EC11 右 A/B/SW | 42, 41, 40 | J2 (右中 5P) |
+| RC522 NFC RST/IRQ/MISO/MOSI/SCK/CS | 4 / 5 / 6 / 7 / 15 / 16 | J4 (左上 8P, SPI2 GPIO Matrix) |
+| USB OTG D-/D+ | 19 / 20 | OTG 子板（固定） |
+| 板载 RGB LED | 48 | DevKitC 板载，无外接 LED |
 
 > V3 引脚分配（SuperMini）见 git 历史
 
