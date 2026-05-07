@@ -151,23 +151,14 @@ Three-circle layout matching physical mask. Transfer to device and open in brows
 
 ## Known Limitations / Technical Debt
 
-### HID Key Report: No Multi-key Support
-
-Current `send_key_up()` releases ALL keys (sends empty report). Fine for single-input use case, will need fix for hold-button-while-rotating scenarios.
-
-**Fix when needed**: Maintain `pressed_keys[6]` state array, add/remove individual keycodes per event.
-
-### sdkconfig 仍是 V3 4MB 配置（未启用 octal PSRAM）
-
-`sdkconfig.defaults` 当前是 V3 SuperMini 的 4MB flash + 无 PSRAM。固件本身不分配 PSRAM 所以工作正常，但 16MB flash 只用前 4MB。烧录时会有一条良性警告：
-```
-W spi_flash: Detected size(16384k) larger than the size in the binary image header(4096k). Using the size in the binary image header.
-```
-PCB 量产前需要单独提交一个 commit，把 `sdkconfig.defaults` 升到 16MB + octal PSRAM。
-
 ### NFC SPI 时钟暂用 1MHz
 
 飞线版本 RF 发射时电源/地噪声会让默认 5MHz SPI 在 SELECT 命令上偶发 RX timeout。目前在 `main/nfc_handler.c` 显式设置 `clock_speed_hz = 1000000` 规避。**PCB 版本可以尝试拉回 5MHz**，铜箔走线 + 适当去耦电容后应该能稳定。
+
+### Resolved (history)
+
+- ~~HID Key Report 无多键支持~~：2026-05-08 已用 `s_pressed_keys[6]` + `s_hid_mutex` 重构 (`main/tusb_hid_example_main.c`)。input + NFC 两条 task 现在通过同一把锁串行化报告提交，按住 F1 + 转旋钮等组合能正确发出。
+- ~~sdkconfig 仍是 V3 4MB 配置~~：2026-05-08 升级为 N16R8 (16MB QIO flash + 8MB Octal PSRAM @ 80MHz)。bootloader 不再警告 size mismatch；PSRAM 启用后 heap 可在大 buffer 场景自动外溢到 SPIRAM。
 
 ## Documentation Structure
 

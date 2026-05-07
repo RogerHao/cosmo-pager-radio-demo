@@ -1,12 +1,26 @@
-# This file was generated using idf.py save-defconfig. It can be edited manually.
-# Espressif IoT Development Framework (ESP-IDF) Project Minimal Configuration
+# Cosmo Radio V4 — ESP32-S3 DevKitC N16R8
+# 16 MB QIO flash + 8 MB Octal PSRAM
 #
+# This file was hand-edited (not via `idf.py save-defconfig`) so the comments
+# survive regeneration. Keep it minimal: only options that diverge from the
+# ESP-IDF defaults belong here.
 
-# TinyUSB HID Configuration
+# --- TinyUSB HID ---
 CONFIG_TINYUSB_HID_COUNT=1
 
-# Flash Configuration (ESP32-S3 SuperMini = 4MB)
-CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+# --- Flash (N16R8 = 16 MB QIO @ 80 MHz) ---
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 
-# Partition Table
+# --- PSRAM (N16R8 = 8 MB Octal @ 80 MHz, internal pins GPIO26-37) ---
+# We don't actively allocate to PSRAM today, but enabling it (a) silences the
+# bootloader's flash-size mismatch warning and (b) makes the heap automatically
+# fall back to PSRAM if a future feature (audio buffers, image cache) needs it.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# --- Partition Table ---
+# 3 MB factory app, no OTA. Plenty for the HID + NFC firmware (~600 KB today).
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y

@@ -15,6 +15,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "tinyusb.h"
 #include "tinyusb_default_config.h"
 #include "class/hid/hid_device.h"
@@ -103,45 +104,102 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
     (void)bufsize;
 }
 
-/********* HID Key Functions ***************/
+/********* HID Key State + Reporting ***************/
 
-// Send a key press (key down)
-static void send_key_down(uint8_t keycode)
+// Multi-key HID state. Two FreeRTOS tasks write here concurrently:
+//   - input_handler_task: button + encoder events
+//   - RC522 event task:   NFC tag scans -> string injection
+// All access goes through s_hid_mutex; the helpers below take/give it
+// internally so callers don't need to think about locking.
+//
+// `keys_*` operate on the array (held-key set). `hid_*` are the public
+// actions (down / up / pulse / type-char) that wrap report submission.
+static SemaphoreHandle_t s_hid_mutex = NULL;
+static uint8_t s_pressed_keys[6] = {0};
+static uint8_t s_modifier = 0;
+
+// Add keycode to the pressed-set. No-op if already present.
+// Returns false on rollover (>6 keys held) — caller can ignore safely.
+// MUST be called with s_hid_mutex held.
+static bool keys_add(uint8_t keycode)
 {
-    if (!tud_mounted()) {
-        return;
+    if (keycode == 0) return false;
+    int free_slot = -1;
+    for (int i = 0; i < 6; i++) {
+        if (s_pressed_keys[i] == keycode) return true;     // already pressed
+        if (s_pressed_keys[i] == 0 && free_slot < 0) free_slot = i;
     }
-
-    uint8_t keycodes[6] = {keycode, 0, 0, 0, 0, 0};
-    tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycodes);
+    if (free_slot < 0) return false;                       // 6KRO rollover
+    s_pressed_keys[free_slot] = keycode;
+    return true;
 }
 
-// Send key release (all keys up)
-static void send_key_up(void)
+// Remove keycode from the pressed-set (no-op if absent).
+// MUST be called with s_hid_mutex held.
+static void keys_remove(uint8_t keycode)
 {
-    if (!tud_mounted()) {
-        return;
+    for (int i = 0; i < 6; i++) {
+        if (s_pressed_keys[i] == keycode) {
+            s_pressed_keys[i] = 0;
+        }
     }
-
-    tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, NULL);
 }
 
-// Send a key pulse (press + delay + release) - for encoder events
-static void send_key_pulse(uint8_t keycode)
+// Submit current modifier + pressed-set as a HID report.
+// MUST be called with s_hid_mutex held.
+static void hid_report_locked(void)
 {
-    send_key_down(keycode);
+    if (!tud_mounted()) return;
+    tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, s_modifier, s_pressed_keys);
+}
+
+// Press a key (idempotent). Holds across subsequent reports until hid_key_up().
+static void hid_key_down(uint8_t keycode)
+{
+    xSemaphoreTake(s_hid_mutex, portMAX_DELAY);
+    keys_add(keycode);
+    hid_report_locked();
+    xSemaphoreGive(s_hid_mutex);
+}
+
+// Release a specific key. Other held keys remain pressed.
+static void hid_key_up(uint8_t keycode)
+{
+    xSemaphoreTake(s_hid_mutex, portMAX_DELAY);
+    keys_remove(keycode);
+    hid_report_locked();
+    xSemaphoreGive(s_hid_mutex);
+}
+
+// Pulse a key (down -> KEY_PULSE_MS -> up). Used for rotary encoder detents.
+static void hid_key_pulse(uint8_t keycode)
+{
+    hid_key_down(keycode);
     vTaskDelay(pdMS_TO_TICKS(KEY_PULSE_MS));
-    send_key_up();
+    hid_key_up(keycode);
 }
 
-// Send a key with modifier (e.g., shift for uppercase letters)
-static void send_key_down_mod(uint8_t modifier, uint8_t keycode)
+// Type one ASCII char as a press+release with optional modifier OR'd in.
+// Releases the lock between press and release so user input can interleave
+// between characters of an NFC string injection.
+static void hid_type_char(uint8_t modifier, uint8_t keycode)
 {
-    if (!tud_mounted()) {
-        return;
-    }
-    uint8_t keycodes[6] = {keycode, 0, 0, 0, 0, 0};
-    tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, modifier, keycodes);
+    xSemaphoreTake(s_hid_mutex, portMAX_DELAY);
+    uint8_t prev_mod = s_modifier;
+    s_modifier = prev_mod | modifier;
+    keys_add(keycode);
+    hid_report_locked();
+    xSemaphoreGive(s_hid_mutex);
+
+    vTaskDelay(pdMS_TO_TICKS(STRING_KEY_DOWN_MS));
+
+    xSemaphoreTake(s_hid_mutex, portMAX_DELAY);
+    keys_remove(keycode);
+    s_modifier = prev_mod;
+    hid_report_locked();
+    xSemaphoreGive(s_hid_mutex);
+
+    vTaskDelay(pdMS_TO_TICKS(STRING_KEY_UP_MS));
 }
 
 // Translate ASCII to HID (modifier, keycode). Returns false if char not supported.
@@ -204,69 +262,68 @@ static void send_string(const char *str)
         if (!ascii_to_hid(*p, &mod, &kc)) {
             continue;
         }
-        send_key_down_mod(mod, kc);
-        vTaskDelay(pdMS_TO_TICKS(STRING_KEY_DOWN_MS));
-        send_key_up();
-        vTaskDelay(pdMS_TO_TICKS(STRING_KEY_UP_MS));
+        hid_type_char(mod, kc);
     }
 }
 
 /********* Input Event Handling ***************/
 
-// Callback for input events from input_handler module
+// Callback for input events from input_handler module.
+// Each event maps to a *single* keycode press or release, so combinations like
+// "hold ENC1_SW (F1) and rotate ENC1 (Up)" produce the correct F1+Up combo.
 static void on_input_event(const input_event_t *event)
 {
     switch (event->type) {
     case INPUT_EVENT_BUTTON_PRESS:
         ESP_LOGI(TAG, "BTN -> ENTER (pressed)");
         led_indicator_red();
-        send_key_down(KEY_ENTER);
+        hid_key_down(KEY_ENTER);
         break;
 
     case INPUT_EVENT_BUTTON_RELEASE:
         ESP_LOGI(TAG, "BTN -> ENTER (released)");
         led_indicator_off();
-        send_key_up();
+        hid_key_up(KEY_ENTER);
         break;
 
     case INPUT_EVENT_ENC1_CW:
         ESP_LOGI(TAG, "ENC1 CW -> UP");
-        send_key_pulse(KEY_UP_ARROW);
+        hid_key_pulse(KEY_UP_ARROW);
         break;
 
     case INPUT_EVENT_ENC1_CCW:
         ESP_LOGI(TAG, "ENC1 CCW -> DOWN");
-        send_key_pulse(KEY_DOWN_ARROW);
+        hid_key_pulse(KEY_DOWN_ARROW);
         break;
 
     case INPUT_EVENT_ENC1_SW_PRESS:
         ESP_LOGI(TAG, "ENC1 SW -> F1 (pressed)");
-        send_key_down(KEY_F1);
+        hid_key_down(KEY_F1);
         break;
 
     case INPUT_EVENT_ENC1_SW_RELEASE:
         ESP_LOGI(TAG, "ENC1 SW -> F1 (released)");
-        send_key_up();
+        hid_key_up(KEY_F1);
         break;
 
     case INPUT_EVENT_ENC2_CW:
         ESP_LOGI(TAG, "ENC2 CW -> RIGHT");
-        send_key_pulse(KEY_RIGHT_ARROW);
+        hid_key_pulse(KEY_RIGHT_ARROW);
         break;
 
     case INPUT_EVENT_ENC2_CCW:
         ESP_LOGI(TAG, "ENC2 CCW -> LEFT");
-        send_key_pulse(KEY_LEFT_ARROW);
+        hid_key_pulse(KEY_LEFT_ARROW);
         break;
 
     case INPUT_EVENT_ENC2_SW_PRESS:
         ESP_LOGI(TAG, "ENC2 SW -> F2 (pressed)");
-        send_key_down(KEY_F2);
+        hid_key_down(KEY_F2);
         break;
 
     case INPUT_EVENT_ENC2_SW_RELEASE:
         ESP_LOGI(TAG, "ENC2 SW -> F2 (released)");
-        send_key_up();
+        hid_key_up(KEY_F2);
         break;
 
     default:
@@ -310,6 +367,13 @@ static void on_nfc_tag(const char *payload, const char *uid_hex)
 void app_main(void)
 {
     ESP_LOGI(TAG, "Cosmo Pager Radio - USB HID Keyboard");
+
+    // HID state mutex must exist before any task can submit a report.
+    s_hid_mutex = xSemaphoreCreateMutex();
+    if (s_hid_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create HID mutex");
+        abort();
+    }
 
     // Initialize USB
     ESP_LOGI(TAG, "USB initialization");
