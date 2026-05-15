@@ -18,13 +18,20 @@ static const char *TAG = "INPUT";
 
 // GPIO pin definitions (V4 — ESP32-S3 DevKitC N16R8, finalized 2026-05-06)
 // See CLAUDE.md "GPIO Pin Assignments" for connector map and rationale.
+//
+// NOTE (2026-05-15): Knob harnesses are physically reversed on the current
+// breadboard vs. CLAUDE.md's table — the LEFT knob lands on GPIO 42/41/40
+// (originally allocated to the right encoder) and the RIGHT knob lands on
+// GPIO 17/18/8. Firmware compensates here so ENC1 still means "left knob"
+// and ENC2 still means "right knob". Restore the original mapping if the
+// PCB harness follows CLAUDE.md.
 #define GPIO_BUTTON     1   // J3 (右上 2P) - Kailh BOX action button
-#define GPIO_ENC1_A     17  // J1 (左中 5P) - EC11 Left A
-#define GPIO_ENC1_B     18  // J1 (左中 5P) - EC11 Left B
-#define GPIO_ENC1_SW    8   // J1 (左中 5P) - EC11 Left push switch
-#define GPIO_ENC2_A     42  // J2 (右中 5P) - EC11 Right A
-#define GPIO_ENC2_B     41  // J2 (右中 5P) - EC11 Right B
-#define GPIO_ENC2_SW    40  // J2 (右中 5P) - EC11 Right push switch
+#define GPIO_ENC1_A     42  // EC11 Left A  (was J2/right; swapped — see note above)
+#define GPIO_ENC1_B     41  // EC11 Left B  (was J2/right; swapped)
+#define GPIO_ENC1_SW    40  // EC11 Left push switch (was J2/right; swapped)
+#define GPIO_ENC2_A     17  // EC11 Right A (was J1/left;  swapped)
+#define GPIO_ENC2_B     18  // EC11 Right B (was J1/left;  swapped)
+#define GPIO_ENC2_SW    8   // EC11 Right push switch (was J1/left;  swapped)
 
 // All input GPIOs as a mask
 #define GPIO_INPUT_MASK ((1ULL << GPIO_BUTTON) | \
