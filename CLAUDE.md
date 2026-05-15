@@ -99,7 +99,7 @@ EC11 是纯机械开关，**不需要 VCC**，3 个 IO + GND 即可工作（C / 
 | Encoder 2 CCW | Left arrow | Mode previous |
 | Encoder 2 SW press | F2 | (placeholder, 平板侧可重新映射) |
 | Encoder 2 SW release | (key up) | |
-| NFC tag scan (NDEF Text 写入) | `#<payload>\n` | **主路径**：固件读 NDEF Text Record，把 payload 加 `#` 前缀 + Enter 键入 |
+| NFC tag scan (NDEF Text 写入) | `<payload>\n` | **主路径**：固件读 NDEF Text Record，原样键入 payload + Enter（无前缀） |
 | NFC tag scan (无 NDEF / 兜底) | `NFC:<UID_HEX>\n` | 兜底：空白卡 / 非 NTAG / 解析失败时类型 UID，方便诊断 |
 
 ### NFC Tag 内容编码契约
@@ -109,7 +109,7 @@ EC11 是纯机械开关，**不需要 VCC**，3 个 IO + GND 即可工作（C / 
 - **payload 长度上限**：32 字节（超长截断）
 - **重复触发抑制**：同 UID 1.5s 内静默丢弃（应对 RC522 心跳抖动）
 - **生产流程**：用任一手机 NFC writer app（NFC Tools 等）写卡，固件零工具依赖
-- **平板侧解析**：以 `\n` 分行，`#` 开头是 NFC payload，`NFC:` 开头是 UID 兜底，其它键是输入设备事件
+- **平板侧解析**：以 `\n` 分行，`NFC:` 开头是 UID 兜底；其余整行可能是 NFC payload 原文，也可能是 HID 键事件（旋钮箭头/Enter/F1/F2 等），平板侧需自行区分
 
 ## Hardware Target (V4)
 

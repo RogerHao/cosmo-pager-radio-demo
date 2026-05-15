@@ -332,15 +332,14 @@ static void on_input_event(const input_event_t *event)
 }
 
 // NFC tag scan callback — typed protocol depends on what's on the tag:
-//   - NDEF Text payload present → "#<payload>\n" (product-content protocol)
-//   - No NDEF / unparseable     → "NFC:<UID>\n"  (UID fallback for diagnostics)
-// The Android app distinguishes the two by the leading character.
+//   - NDEF Text payload present → "<payload>\n" (raw payload, no prefix)
+//   - No NDEF / unparseable     → "NFC:<UID>\n" (UID fallback for diagnostics)
 static void on_nfc_tag(const char *payload, const char *uid_hex)
 {
     char buf[64];
     int n;
     if (payload != NULL) {
-        n = snprintf(buf, sizeof(buf), "#%s\n", payload);
+        n = snprintf(buf, sizeof(buf), "%s\n", payload);
     } else {
         n = snprintf(buf, sizeof(buf), "NFC:%s\n", uid_hex);
     }

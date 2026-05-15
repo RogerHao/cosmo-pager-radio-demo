@@ -123,8 +123,8 @@
 - [ ] NFC SPI 时钟从 1MHz 拉回 5MHz（需 PCB 焊好后验证，飞线版受 RF 噪声干扰）
 
 ### 旋钮与协议
-> ✅ 协议定稿（2026-05-07）：详见 [README.md 交互设计](README.md#交互设计) 和 [CLAUDE.md HID Key Mappings](CLAUDE.md)
-> NFC 主路径：固件读 NDEF Text → 加 `#` 前缀 + Enter 键入；UID 兜底用 `NFC:` 前缀
+> ✅ 协议定稿（2026-05-07，2026-05-15 简化）：详见 [README.md 交互设计](README.md#交互设计) 和 [CLAUDE.md HID Key Mappings](CLAUDE.md)
+> NFC 主路径：固件读 NDEF Text → 原样键入 + Enter（无前缀，2026-05-15 起去掉 `#`）；UID 兜底用 `NFC:` 前缀
 
 - [x] 编写旋钮 + NFC HID 协议（CLAUDE.md HID Key Mappings + NFC Tag 内容编码契约） ✅ 2026-05-07
 
@@ -203,5 +203,6 @@
 | 05-06 | 万能板飞线原型焊接，V4 GPIO 全部跑通 |
 | 05-07 | NFC NDEF Text 解析 + `#<payload>\n` 协议落地，端到端跑通 |
 | 05-08 | 固件 V4 彻底优化（sdkconfig + HID 多键并发）+ 结构件设计启动 + USB 互联走线验证 |
+| 05-15 | NFC HID 协议简化：NDEF payload 去掉 `#` 前缀，固件 + 文档同步；端到端实卡验证通过（UID `04A38B6A220289`→`004`、`0463DA47220289`→`002`） |
 | 05 中旬 | KiCad PCB 设计 + 外壳 3D 模型适配 |
 | ~05-20 | 单套原型装配 + 交付技术验证结果 |
