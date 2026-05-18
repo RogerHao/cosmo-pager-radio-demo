@@ -28,7 +28,7 @@
 | 固件 | Claude | 彻底优化升级到 V4（A 类技术债清理 + 代码整理） |
 | 结构 | Dehong | NFC 模块 + 长按条按钮模块结构设计 + 历史结构改进 |
 
-**PCB 设计前还要验证一项**：OTG 一分二子板 ↔ DevKitC 主控板之间的 USB 互联，能否从"独立 USB-A↔USB-C 线缆"换成"载板 PCB 走线"。详见下方 [USB 互联走线](#usb-互联走线pcb-设计前必须验证) 专项。
+✅ **2026-05-18 PCB Plan v2 锁定**：USB 互联走线方案确定为"OTG dongle 拆 USB-A → 4 飞线 → J5 4P → DevKitC 排针 GPIO19/20"，固件不需 revert L/R swap，详见 `~/.claude/plans/iridescent-snuggling-planet.md`。
 
 ---
 
@@ -44,33 +44,33 @@
 
 ## 关键待办
 
-### USB 互联走线（PCB 设计前必须验证） 🆕 2026-05-08
+### USB 互联走线 ✅ 2026-05-18 已锁定（Plan v2）
 
-> **当前万能板**：OTG 一分二子板的 host 端是 USB-A 3.0 母座，通过一根独立 USB-A↔USB-C 线缆连到 ESP32-S3 DevKitC 的 USB-C 母座。
-> **目标方案**：去掉这条独立线缆，让 USB D+/D-/VBUS/GND 通过载板 PCB 走线直连。
->
-> 收益：(1) 砍掉一根 USB-A↔USB-C 线缆物料 (2) 内部走线大幅简化，结构空间释放 (3) 整机更紧凑，可靠性提升（少一对插拔接触点）
->
-> 风险点：(1) OTG 子板 host 端能否绕开 USB-A 母座暴露出 D+/D- (2) DevKitC 端能否绕开 USB-C 母座取信号 (3) USB 2.0 信号在双面板上短距离走线（<10cm）的信号完整性
+> 方案：OTG dongle (YK16-09E V1) 拆 USB-A 母座 → 4 根 AWG28 飞线 → J5 (XH2.54 4P) → DevKitC 排针 GPIO19/20 + 5V/GND。
+> 详见 [`docs/hardware/otg-adapter.md`](docs/hardware/otg-adapter.md) + `~/.claude/plans/iridescent-snuggling-planet.md`。
 
-- [ ] 拆解 OTG 子板，确定 host 端 D+/D-/VBUS/GND 的可焊点（绕开 USB-A 母座）
-- [ ] DevKitC USB-C 母座同样取出 D+/D-/VBUS/GND 焊点（或直接从 ESP32-S3 GPIO19/20 + 5V/GND 引出）
-- [ ] 4 根飞线试验：替代原 USB-A↔C 线缆，回归 HID 枚举 + 充电接入 + 电池电量净增
-- [ ] 通过则更新 PCB Spec：载板预留 OTG 子板 host 端的 4-pin 排针/焊盘
-- [ ] 不通过则保留独立线缆方案，标注 PCB 上的线缆出口位置
+- [x] OTG 子板选型 (YK16-09E V1) ✅ 2026-05-06
+- [x] USB 走线方案确认（J5 4P → DevKitC 排针，无中间 USB-C 跳线）✅ 2026-05-18
 
-### PCB 载板设计
-- [ ] 确认 ESP32-S3 DevKitC N16R8 实际排针 pinout → 确定排母座间距
-- [ ] KiCad 原理图：主控插座 + 4 组 XH2.54 连接器 + OTG 子板 USB 走线接口
-- [ ] PCB layout：80×50mm 双面板，参考 [PCB Spec](docs/project/CosmoRadio-V4-PCB-Spec.md)
-- [ ] **USB 走线方案确认**（见上方 [USB 互联走线](#usb-互联走线pcb-设计前必须验证)）
-- [ ] JLCPCB 下单打样 (5 片)
-- [ ] 焊接验证：排母座 + JST 插座 + OTG 子板装配
-- [ ] 螺丝规格确认：**M2.5×10 平头内六角**（比十字花更精密美观）
+### PCB 载板设计 ✅ 2026-05-18 落版完成 (Phase 1-7)
+- [x] DevKitC N16R8 排针间距确认（22.86mm = 9 × 2.54mm pitch）✅ 2026-05-18
+- [x] 用两条 1×22 单排母（不用 2×22 双排）✅ 2026-05-18
+- [x] 加 4× 10kΩ + 4× 10nF EC11 RC 去抖网络 ✅ 2026-05-18
+- [x] KiCad 原理图（circuit-synth Phase 2-3）：U1A/U1B + J1-J5 + R1-R4 + C1-C4 ✅
+- [x] PCB layout（pcbnew API Phase 4）：100×100mm 双面板，B-type 立式直插，latch 朝外 ✅
+- [x] Freerouting 自动布线 + DRC 0/0 ✅
+- [x] 出 Gerber zip + BOM + 渲染图 (Phase 7) ✅ `pcb/cosmoradio-v4-carrier/output/`
+- [x] EC11 端子线序按实物 SW-GND-A-GND-B (修正 v2 凭空 ABCDE 顺序错误) ✅ 2026-05-18
+- [x] U1A pin 2 = GND (修正 v2 误标 5V 的短路隐患) ✅ 2026-05-18
+- [x] 螺丝规格确认：M2.5×10 平头内六角 ✅
+- [ ] **JLCPCB 上传 zip 下单打样 (5 片免费打样)**
+- [ ] PCB 到货后焊接：2× 1×22 排母 + 5× B-type JST + 8× 0805 + 4× M2.5 螺孔
+- [ ] schematic PDF 手动连线修正 (circuit-synth ≥3-node 网塌网 bug 的可视化修复，不影响 Gerber)
 
-### USB-C 板载集成评估（成本优化重点） ✅ 2026-04-01
-> ~~当前方案：FPC 弯头 ¥24.80 + 一分二 ¥33.00 = **¥57.80/套 (占单套成本 43%)**~~
-> 选定方案 B：PCB 双 USB-C 座 + VBUS 被动注入，成本 **¥3.12/套**，详见 [docs/hardware/usb.md](docs/hardware/usb.md)
+### USB-C 板载集成评估 ✅ 2026-05-18 关闭 — OTG dongle 方案替代
+> ~~原方案 B：PCB 双 USB-C 座 + 被动 SS34 VBUS 注入~~ → 2026-04-30 实测失败（Tab A9 PD 协议不接受）
+> **最终方案**：外购 OTG dongle (YK16-09E V1) 拆 USB-A 内置，详见 [docs/hardware/otg-adapter.md](docs/hardware/otg-adapter.md)
+> ~~历史选型详情~~ → [docs/hardware/usb.md](docs/hardware/usb.md) (已标记历史文档)
 
 - [x] 研究 USB-C 母座直焊 PCB 方案（CC 引脚配置、ESD 保护）→ 鹏宇 6P 大电流转接板，板载 5.1kΩ CC pull-down
 - [x] 研究 USB 信号分流芯片（如 USB Hub IC），实现板载一分二 → 不需要 Hub IC，被动 VBUS 注入即可

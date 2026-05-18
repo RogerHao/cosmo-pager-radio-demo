@@ -1,6 +1,12 @@
-# CosmoRadio V4 — USB 接口方案设计
+# CosmoRadio V4 — USB 接口方案设计（历史文档）
 
-> 目标：单根 USB-C 线连接 PCB 与平板，同时实现 HID 数据通信 + 外部充电器给平板充电
+> ⚠️ **2026-05-18 状态**：本文件是早期方案 A/B/C 调研记录，**已被 OTG dongle 方案替代**。
+> 当前 V4 最终方案：
+> - 充电 + USB Host 由 OTG dongle (YK16-09E V1) 内置子板承担，详见 [otg-adapter.md](otg-adapter.md)
+> - 主 PCB 不上 USB-C 母座、不做 VBUS 注入、无 SS34
+> - PCB 设计 v2 详细方案见 `~/.claude/plans/iridescent-snuggling-planet.md`
+>
+> 以下内容保留为历史参考。
 
 ## 2026-04-30 修正结论
 

@@ -21,14 +21,14 @@
 
 | 组件 | 规格 | 用途 |
 |------|------|------|
-| 安卓平板 | 客户自购 | 主机，运行 Web 应用 |
+| 安卓平板 | 客户自购 (Samsung Galaxy Tab A9 8.7") | 主机，运行 Web 应用 |
 | ESP32-S3 DevKitC N16R8 | 36+ GPIO / USB OTG / 16MB Flash / 8MB PSRAM | HID 控制器 |
-| 定制 PCB 载板 | 80×50mm 双面 (JLCPCB) | 消灭飞线，XH2.54 即插即用 |
+| 定制 PCB 载板 | **100×100mm 双面** (JLCPCB 免费打样)，**两条 1×22 单排母** + 5 路 XH2.54 + 4× 10kΩ/10nF 去抖 | 消灭飞线，XH2.54 即插即用 |
 | EC11 旋钮 × 2 | 15mm 半轴柄旋转编码器 | 频率调节 / 模式切换 |
 | Kailh BOX 轴 + 6.25U 卫星轴 | 机械键盘蝴蝶结构，3.6mm 行程 | Action Button |
-| RC522 mini NFC 模块 × 1~2 | 13.56MHz SPI，读 NTAG215 UID | NFC 刷卡交互（数量待确认） |
-| WS2812B LED × 1 | 5050 RGB | 状态指示 |
-| USB-C 大电流转接板 × 2 + SS34 | PCB 板载 VBUS 注入，替代 FPC+一分二 | 充电 + 数据单线直连 |
+| RC522 mini NFC 模块 × 1 | 13.56MHz SPI，读 NTAG215 NDEF | NFC 刷卡交互（最终 1 个，2026-05-06 确认） |
+| **OTG dongle (YK16-09E V1) 内置子板** | 拆 USB-A 母座，4 飞线接 J5 → DevKitC 排针 GPIO19/20 + 5V/GND | 平板 Data Host + Power Sink 同时工作 |
+| 板载 RGB LED | DevKitC GPIO48 WS2812B | 状态指示（不外接 LED）|
 
 ## 连接方案
 
@@ -135,20 +135,21 @@ idf.py build                               # 构建
 idf.py -p /dev/cu.usbmodem* flash monitor  # 烧录并监控
 ```
 
-## GPIO 引脚分配（V4 终版，2026-05-06 定稿）
+## GPIO 引脚分配（V4 终版）
 
-> N16R8 = 8MB octal PSRAM，**GPIO 26-37 全段被内部 octal SPI flash + PSRAM 占用，不可使用**。详情和连接器/排针对应表见 [CLAUDE.md](CLAUDE.md)。
+> N16R8 = 8MB octal PSRAM，**GPIO 26-37 全段被内部 octal SPI flash + PSRAM 占用，不可使用**。完整表和"PCB 位置"列见 [CLAUDE.md](CLAUDE.md) "GPIO Pin Assignments"。
 
-| 功能 | GPIO | 连接器 |
+| 功能 | GPIO | 连接器 (PCB 位置) |
 |------|------|--------|
-| Action Button | 1 | J3 (右上 2P) |
-| EC11 左 A/B/SW | 17, 18, 8 | J1 (左中 5P) |
-| EC11 右 A/B/SW | 42, 41, 40 | J2 (右中 5P) |
-| RC522 NFC RST/IRQ/MISO/MOSI/SCK/CS | 4 / 5 / 6 / 7 / 15 / 16 | J4 (左上 8P, SPI2 GPIO Matrix) |
-| USB OTG D-/D+ | 19 / 20 | OTG 子板（固定） |
+| EC11-L (用户左旋钮) A/B/SW | **42 / 41 / 40** | J1 (PCB 左侧中段, 5P) |
+| EC11-R (用户右旋钮) A/B/SW | **17 / 18 / 8** | J2 (PCB 右侧中段, 5P) |
+| Action Button | 1 | J3 (PCB 左侧靠前, 2P) |
+| RC522 NFC RST/IRQ/MISO/MOSI/SCK/CS | 4 / 5 / 6 / 7 / 15 / 16 | J4 (PCB 右侧, 8P, SPI2 via GPIO Matrix) |
+| OTG USB D-/D+ | 19 / 20 | J5 (PCB 左侧靠后, 4P) → dongle USB |
 | 板载 RGB LED | 48 | DevKitC 板载，无外接 LED |
 
-> V3 引脚分配（SuperMini）见 git 历史
+> EC11 A/B 信号 PCB 上各加 10kΩ 上拉 + 10nF 对地 RC 去抖。
+> V3 引脚分配（SuperMini）见 git 历史。
 
 ## 文档索引
 

@@ -50,38 +50,46 @@ cosmo-radio/                       # 项目根 = ESP-IDF 项目
 └── CMakeLists.txt
 ```
 
-## GPIO Pin Assignments (V4 — ESP32-S3 DevKitC N16R8, finalized 2026-05-06)
+## GPIO Pin Assignments (V4 — ESP32-S3 DevKitC N16R8)
 
-> 万能板飞线优先，按"DevKitC 排针物理位置 ↔ 连接器物理位置"最近邻原则分配。
+> **GPIO 终版（2026-05-06 飞线定稿，2026-05-18 PCB Plan v2 复核）**——下方"位置"列指 **PCB 用户视角**（用户俯视，OTG USB-C 朝外/朝后；详见 [`pcb/asset/ESP32-S3-DevKitC-N16R8.png`](pcb/asset/ESP32-S3-DevKitC-N16R8.png) + Plan v2 物理列分布表）。
 > ⚠️ N16R8 = 8MB **octal** PSRAM — GPIO 26-37 全段被内部 octal SPI flash + PSRAM 占用，不可使用。
 
-| Function | GPIO | Connector | Notes |
-|----------|------|-----------|-------|
-| Action Button | 1 | J3 (右上 2P) | Kailh BOX, press = GND, internal pull-up |
-| EC11 Left A | 17 | J1 (左中 5P) | internal pull-up |
-| EC11 Left B | 18 | J1 (左中 5P) | internal pull-up |
-| EC11 Left SW | 8 | J1 (左中 5P) | internal pull-up |
-| EC11 Right A | 42 | J2 (右中 5P) | internal pull-up |
-| EC11 Right B | 41 | J2 (右中 5P) | internal pull-up |
-| EC11 Right SW | 40 | J2 (右中 5P) | internal pull-up |
-| RC522 NFC RST | 4 | J4 (左上 8P) | low-active |
-| RC522 NFC IRQ | 5 | J4 (左上 8P) | low-active, 当前固件未使用，仅接线预留 |
-| RC522 NFC MISO | 6 | J4 (左上 8P) | SPI2 (FSPI) via GPIO Matrix |
-| RC522 NFC MOSI | 7 | J4 (左上 8P) | SPI2 (FSPI) via GPIO Matrix |
-| RC522 NFC SCK | 15 | J4 (左上 8P) | SPI2 (FSPI) via GPIO Matrix |
-| RC522 NFC CS (SDA) | 16 | J4 (左上 8P) | software-driven |
-| USB D- | 19 | OTG 子板 | Native USB OTG (fixed) |
-| USB D+ | 20 | OTG 子板 | Native USB OTG (fixed) |
-| Onboard RGB LED | 48 | DevKitC 板载 | WS2812B 板载，bring-up 调试用，不外接 LED |
-| Reserved (free) | 2, 9, 10, 11, 12, 13, 14, 38, 39, 47 | — | 扩展可用 |
-| ⚠️ Strapping | 0 (BOOT), 3, 45, 46 | — | 做输入需保证 boot 时电平不被强拉 |
-| ⚠️ UART0 | 43 (TX), 44 (RX) | — | 烧录/monitor 占用，不要做关键输入 |
-| 🔒 Octal PSRAM | 26-37 | — | 内部使用，不可分配 |
+| Function | GPIO | Connector | PCB 位置 | Notes |
+|----------|------|-----------|----------|-------|
+| Action Button | 1 | J3 (2P) | **PCB 左侧靠前** | Kailh BOX, press = GND, internal pull-up |
+| EC11-L (用户左旋钮) A | 42 | J1 (5P) | **PCB 左侧中段** | 外加 10kΩ + 10nF RC 去抖 |
+| EC11-L B | 41 | J1 (5P) | PCB 左侧中段 | 外加 10kΩ + 10nF RC 去抖 |
+| EC11-L SW | 40 | J1 (5P) | PCB 左侧中段 | internal pull-up |
+| EC11-R (用户右旋钮) A | 17 | J2 (5P) | **PCB 右侧中段** | 外加 10kΩ + 10nF RC 去抖 |
+| EC11-R B | 18 | J2 (5P) | PCB 右侧中段 | 外加 10kΩ + 10nF RC 去抖 |
+| EC11-R SW | 8 | J2 (5P) | PCB 右侧中段 | internal pull-up |
+| RC522 NFC RST | 4 | J4 (8P) | **PCB 右侧** | low-active |
+| RC522 NFC IRQ | 5 | J4 (8P) | PCB 右侧 | low-active, 当前固件未使用，仅接线预留 |
+| RC522 NFC MISO | 6 | J4 (8P) | PCB 右侧 | SPI2 (FSPI) via GPIO Matrix |
+| RC522 NFC MOSI | 7 | J4 (8P) | PCB 右侧 | SPI2 (FSPI) via GPIO Matrix |
+| RC522 NFC SCK | 15 | J4 (8P) | PCB 右侧 | SPI2 (FSPI) via GPIO Matrix |
+| RC522 NFC CS (SDA) | 16 | J4 (8P) | PCB 右侧 | software-driven |
+| USB D- | 19 | J5 (4P) | **PCB 左侧靠后**（near USB-C 端）| OTG dongle → J5 → DevKitC 排针 GPIO19 |
+| USB D+ | 20 | J5 (4P) | PCB 左侧靠后 | OTG dongle → J5 → DevKitC 排针 GPIO20 |
+| Onboard RGB LED | 48 | DevKitC 板载 | — | WS2812B 板载，不外接 LED |
+| Reserved (free) | 2, 9, 10, 11, 12, 13, 14, 38, 39, 47 | — | — | 扩展可用 |
+| ⚠️ Strapping | 0 (BOOT), 3, 45, 46 | — | — | 做输入需保证 boot 时电平不被强拉 |
+| ⚠️ UART0 | 43 (TX), 44 (RX) | — | — | 烧录/monitor 占用，不要做关键输入 |
+| 🔒 Octal PSRAM | 26-37 | — | — | 内部使用，不可分配 |
+
+> ⚠️ **运行时不要插 DevKitC 板载 OTG USB-C**：GPIO19/20 同时连到了排针（→ J5 → dongle 注入 VBUS）和 native USB-C 焊盘，外部插 USB-C 会跟 dongle 注入冲突。固件烧录走 DevKitC **UART USB-C**（不是 OTG USB-C）。PCB 顶丝印有 "OTG USB-C: DO NOT PLUG" 警示。
+
+### 关于"用户左/右"的语义
+
+GPIO 表里 "EC11-L" 指**用户视角的左旋钮**（用户左手摸到的那个）。在飞线版上，左旋钮的 A/B/SW 实际接到 GPIO 42/41/40——这跟 DevKitC datasheet "left column" 的关系取决于安装朝向（详见 Plan v2 "DevKitC 物理引脚分布" 章节）。固件代码里 `ENC1` 别名即 EC11-L，`ENC2` 即 EC11-R。
 
 ### EC11 接线说明（V4）
 
 EC11 是纯机械开关，**不需要 VCC**，3 个 IO + GND 即可工作（C / SW2 都接 GND，A / B / SW1 接 GPIO，靠 ESP32 内部上拉拉高）。
-飞线阶段使用内部 ~45kΩ 上拉；PCB 版本会外加 10kΩ 上拉提高抗噪与边沿锐度。
+- **飞线阶段**：仅靠内部 ~45kΩ 上拉，旋钮稳定性"能用但不准"
+- **PCB V4 版**：A/B 信号线外加 **10kΩ 上拉 + 10nF 对地**（RC 时间常数 100µs），既增强边沿陡度又抑制机械抖动；SW 仍仅靠内部上拉
+- 4 个 R (R1-R4) + 4 个 C (C1-C4) 全部 0805 贴片，紧贴 J1/J2 摆放
 
 ### V3 GPIO (SuperMini — deprecated, see git history)
 
@@ -117,10 +125,12 @@ EC11 是纯机械开关，**不需要 VCC**，3 个 IO + GND 即可工作（C / 
 |-------|-------|-------|
 | ESP32-S3 DevKitC N16R8 | 16MB | 8MB |
 
-- **Power**: 外部充电器 → 一分二 OTG + 充电线材内置子板 → 平板（被动 SS34 注入方案已实测失败，弃用）
-- **PCB**: Custom carrier board, 80×50mm, XH2.54 connectors
-- **Connectors**: J1 (EC11 左 5P, 左中), J2 (EC11 右 5P, 右中), J3 (Action Button 2P, 右上), J4 (NFC RC522 8P, 左上). USB / 充电由 OTG 一分二子板承担，无独立 J5/J6
+- **Power**: 外部充电器 → 一分二 OTG + 充电线材内置子板 (YK16-09E V1) → 平板（被动 SS34 注入方案已实测失败，弃用）
+- **PCB**: Custom carrier board, **100×100mm 双面** (JLCPCB 免费打样), XH2.54 connectors
+- **DevKitC 安装**: **两条 1×22 单排母**（不是 2×22 双排，单排好焊好对齐），间距 22.86mm
+- **Connectors**: J1 (EC11-L 5P, **PCB 左侧中段**), J2 (EC11-R 5P, **PCB 右侧中段**), J3 (Action Button 2P, **PCB 左侧靠前**), J4 (NFC RC522 8P, **PCB 右侧**), J5 (OTG dongle USB 4P, **PCB 左侧靠后**)
 - **No external LED**: 取消外接 WS2812B，使用 DevKitC 板载 GPIO48 RGB LED 做调试指示
+- **被动元件**: 4× 10kΩ 0805 + 4× 10nF 0805（EC11 A/B 信号 RC 去抖），其余零无源件
 - **Screws**: M2.5×10 平头内六角 (flat head hex socket)
 - **Speaker**: 使用平板自带音响，不外接
 - **Top button**: 键盘轴 + 6.25U 卫星轴空格键 (~10cm)
@@ -136,10 +146,12 @@ Carrier board designed in KiCad, manufactured by JLCPCB.
 - BOM: `docs/project/CosmoRadio-V4-BOM及报价分析.md`
 
 Key design decisions:
-- ESP32-S3 DevKitC plugs into 2×22P pin header sockets (not soldered)
-- All peripherals connect via XH2.54 JST connectors (zero-solder assembly)
-- NFC uses FSPI hardware SPI (GPIO34-37) for signal integrity
-- External 10K pull-ups for EC11 (more reliable than internal pull-ups)
+- ESP32-S3 DevKitC plugs into **两条 1×22 单排母** (not soldered, easy to swap)
+- All peripherals connect via XH2.54 JST connectors (zero-solder assembly for peripherals)
+- NFC uses SPI2 via GPIO Matrix (GPIO 4/5/6/7/15/16, not hardware-fixed FSPICLK pins — those are inside the octal PSRAM range)
+- EC11 A/B signal lines: external 10kΩ pull-up + 10nF RC debounce filter (τ=100µs) — eliminates the "not crisp one-detent-per-click" issue seen on breadboard with internal pull-ups only
+- OTG dongle (YK16-09E V1) integrated as internal sub-board: USB-A 母座 拆掉后 4 飞线 → J5 4P → DevKitC 排针 GPIO19/20 + 5V/GND
+- **Plan v2 详细方案**：`~/.claude/plans/iridescent-snuggling-planet.md`
 
 ## HID Input Test Tool
 

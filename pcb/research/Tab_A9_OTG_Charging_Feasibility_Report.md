@@ -1,5 +1,11 @@
 # CosmoRadio V4 专用 Tab A9 半主动 USB-C OTG + 充电方案可行性调研报告
 
+> ⚠️ **OBSOLETE — 2026-05-18 状态**：本报告是 2026-04-30 Manus 调研产出的"半主动 SS34 注入"方案可行性评估。
+> 实测结论：**6P 转接板 + SS34 复刻方案失败**，无法让 Tab A9 同时进入 Data Host + Power Sink 状态。
+> 当前 V4 实际方案：**外购 OTG dongle (YK16-09E V1) 内置子板**，详见 [`docs/hardware/otg-adapter.md`](../../docs/hardware/otg-adapter.md)。
+> 本报告仅保留为"为什么不走半主动路线"的历史依据。
+
+
 ## 1. 方案工作原理与机制分析
 
 在 USB-C 和 Android 体系下，实现平板作为 USB Host（控制 ESP32-S3）同时接受外部充电，涉及到 USB 角色协商和电源路径管理的复杂机制。

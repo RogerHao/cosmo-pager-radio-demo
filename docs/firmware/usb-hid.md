@@ -1,103 +1,65 @@
-# Cosmo Pager Radio - USB HID 固件
+# USB HID 固件实现
 
-基于 TinyUSB 的 USB HID 键盘实现，用于 Cosmo Pager Radio 项目。
+> ⚠️ **2026-05-18 状态**：本文件原始内容（V2 XIAO ESP32S3 时代 GPIO 1/D0 描述）已过时，整理为下方简明版。
+> 完整 V4 实现细节见 [`/CLAUDE.md`](../../CLAUDE.md) "HID Key Mappings" + "GPIO Pin Assignments"。
 
 ## 概述
 
-本固件将 XIAO ESP32S3 作为 USB HID 键盘设备，将物理输入（旋钮、按钮）转换为键盘按键事件。相比 BLE HID 方案，USB 方案具有更低延迟和更稳定的连接。
+基于 **TinyUSB** 的 USB HID 键盘实现，运行在 **ESP32-S3 DevKitC N16R8**。把物理输入（双 EC11 旋钮 + Kailh BOX 按钮 + RC522 NFC）转换为键盘事件。USB OTG 通过外置 dongle (YK16-09E V1) 实现"平板 USB Host + 充电"同时工作。
 
-## 特性
+V1/V2 BLE HID 方案已删除（见 git 历史）；V3 SuperMini → V4 DevKitC N16R8 已完成迁移。
 
-- **USB HID 键盘**: 即插即用，无需配对
-- **输入处理**: GPIO 中断驱动，支持两个旋转编码器和一个按钮
-- **LED 指示**: WS2812 RGB LED 状态反馈
-- **强制重启**: 长按按钮 15 秒触发设备重启
+## 当前固件入口
 
-## 输入映射
+| 文件 | 职责 |
+|------|------|
+| `main/tusb_hid_example_main.c` | TinyUSB 初始化 + ASCII→HID keycode 编码 + 多键并发报告管理（`s_pressed_keys[6]` + `s_hid_mutex`）|
+| `main/input_handler.c/h` | GPIO 中断驱动状态机：Action Button + 双 EC11 (A/B/SW)，事件队列分发 |
+| `main/nfc_handler.c/h` | RC522 SPI (1MHz, SPI2 via GPIO Matrix) + NDEF Text Record 解析 + 1.5s 同卡去重 |
+| `main/led_indicator.c/h` | DevKitC GPIO48 板载 WS2812B RGB 状态指示 |
 
-| 输入 | HID 按键 | GPIO |
-|------|----------|------|
-| 按钮按下 | Enter (按下) | GPIO1 (D0) |
-| 按钮释放 | Enter (释放) | GPIO1 (D0) |
-| 旋钮1 顺时针 | ↑ 上箭头 | GPIO2/3 (D1/D2) |
-| 旋钮1 逆时针 | ↓ 下箭头 | GPIO2/3 (D1/D2) |
-| 旋钮2 顺时针 | → 右箭头 | GPIO4/5 (D3/D4) |
-| 旋钮2 逆时针 | ← 左箭头 | GPIO4/5 (D3/D4) |
+## HID 输入映射
+
+权威表见 [/CLAUDE.md](../../CLAUDE.md) "HID Key Mappings"，简要：
+
+| 输入 | HID 按键 |
+|------|---------|
+| Action Button (GPIO1) 按 | Enter |
+| EC11-L (GPIO 42/41/40) 旋转 / 按 | ↑/↓ / F1 |
+| EC11-R (GPIO 17/18/8) 旋转 / 按 | →/← / F2 |
+| NFC 卡 (NDEF Text) | `<payload>\n` |
+| NFC 卡 (UID 兜底) | `NFC:<UID_HEX>\n` |
 
 ## LED 行为
+
+DevKitC GPIO48 板载 RGB（不外接 LED）：
 
 | 事件 | 颜色 |
 |------|------|
 | 启动完成 | 绿色闪烁 |
-| USB 连接 | 蓝色闪烁 |
-| 按钮按下 | 红色常亮 |
-| 按钮释放 | 熄灭 |
+| 按钮按下 | 红色 |
+| NFC 识别中 | 蓝色 |
 
 ## 构建与烧录
 
 ```bash
-# 激活 ESP-IDF 环境
-get_idf
-
-# 设置目标芯片（首次）
-idf.py set-target esp32s3
-
-# 构建
+get_idf                                    # 激活 ESP-IDF 环境
+idf.py set-target esp32s3                  # 首次
 idf.py build
-
-# 烧录并监控
-idf.py -p /dev/cu.usbmodem* flash monitor
+idf.py -p /dev/cu.usbmodem* flash monitor  # 走 DevKitC UART USB-C 烧录，不走 OTG USB-C
 ```
 
-## 串口输出示例
+> ⚠️ **烧录走 UART USB-C，不要走 OTG USB-C** — V4 PCB 设计下 GPIO19/20 连到 J5 接 dongle 注入 VBUS，外部插 OTG USB-C 会冲突。
 
-```
-I (xxx) USB_HID: Cosmo Pager Radio - USB HID Keyboard
-I (xxx) USB_HID: USB initialization DONE
-I (xxx) LED: LED indicator initialized on GPIO6
-I (xxx) INPUT: Input handler initialized (GPIO interrupts)
-I (xxx) INPUT:   Button: GPIO1, ENC1: GPIO2/3, ENC2: GPIO4/5
-I (xxx) USB_HID: USB connected
-I (xxx) USB_HID: BTN -> ENTER (pressed)
-I (xxx) USB_HID: BTN -> ENTER (released)
-I (xxx) USB_HID: ENC1 CW -> UP
-I (xxx) USB_HID: ENC2 CCW -> LEFT
-```
+## 已知技术债
 
-## USB 描述符
+详见 [/CLAUDE.md](../../CLAUDE.md) "Known Limitations / Technical Debt"：
 
-- **制造商**: Cosmo
-- **产品名**: Pager Radio Input
-- **设备类型**: HID 键盘
+- NFC SPI 时钟暂用 1MHz（PCB 版可尝试拉回 5MHz）
+- HID 多键并发已修复（2026-05-08 `s_pressed_keys[6]` + mutex）
+- NFC 启动失败容错已实现（2026-05-10 warn 不 abort）
+- sdkconfig 已升级 N16R8（2026-05-08 16MB QIO + 8MB Octal PSRAM）
 
-## 硬件要求
+## 硬件需求
 
-- Seeed Studio XIAO ESP32S3
-- EC11 旋转编码器 x2
-- 微动开关 x1
-- WS2812 RGB LED x1
-
-## 与 BLE HID 的对比
-
-| 方面 | BLE HID | USB HID |
-|------|---------|---------|
-| 连接方式 | 蓝牙配对 | 即插即用 |
-| 延迟 | 7-20ms | 1-10ms |
-| 稳定性 | 易受干扰 | 稳定可靠 |
-| 供电 | 电池 | USB 供电 |
-| 适用场景 | 无线需求 | 固定安装 |
-
-## 文件结构
-
-```
-tusb_hid/
-├── main/
-│   ├── tusb_hid_example_main.c    # 主程序
-│   ├── input_handler.c/h          # 输入处理模块
-│   ├── led_indicator.c/h          # LED 控制模块
-│   ├── CMakeLists.txt
-│   └── idf_component.yml
-├── sdkconfig.defaults
-├── CMakeLists.txt
-└── README.md                      # 本文档
-```
+详见 [/CLAUDE.md](../../CLAUDE.md) "Hardware Target (V4)" + [/docs/project/CosmoRadio-V4-PCB-Spec.md](../project/CosmoRadio-V4-PCB-Spec.md)。
